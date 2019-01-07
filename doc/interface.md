@@ -58,6 +58,7 @@
 ```
 
 msgType说明请参考[msgType说明](msgtype.md)
+maType说明参考[matype说明](matype.md)
 
 ## 2.发送事件通知
 

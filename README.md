@@ -266,10 +266,13 @@ project.host.and.port=http://ip:8080
 
 参考文档[setting.md](doc/setting.md)
 
+## 接口文档
+
+参考文档[interface.md](doc/interface.md)
+
 ## 开发指南
 
 - [developer guide](https://docs.ejabberd.im/developer/guide/)
--
 
 ## 问题反馈
 

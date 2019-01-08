@@ -1,7 +1,5 @@
 # event说明
 
-## 更新组织架构
-
 <table>
         <tr>
             <th>事件</th><th>category</th><th>data</th>
@@ -36,5 +34,4 @@
         <tr>
             <th>踢客户端下线</th><th>100</th><th>参考客户端文档</th>
         </tr>
-        
 </table>

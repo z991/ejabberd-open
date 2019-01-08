@@ -19,6 +19,10 @@ terminate(_Reason, _Req, _State) ->
 
 handle_process([<<"send_thirdmessage">>], Req) ->
     http_send_thirdmessage:handle(Req);
+handle_process([<<"send_xml">>], Req) ->
+    http_send_xml:handle(Req);
+handle_process([<<"send_notify">>], Req) ->
+    http_send_notify:handle(Req);
 handle_process([<<"create_muc">>], Req) ->
     http_muc_create:handle(Req);
 handle_process([<<"add_muc_user">>], Req) ->

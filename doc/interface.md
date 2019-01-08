@@ -70,7 +70,7 @@ maType说明参考[matype说明](matype.md)
    "from":"test1@qtalk.test.org",
    "to":"test2@qtalk.test.org",
    "category":"参见事件说明",
-   "data":"参见事件说明"}
+   "data":"参见事件说明"
 }
 
 返回值：

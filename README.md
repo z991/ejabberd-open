@@ -32,6 +32,10 @@ IM HTTP接口服务，负责IM相关数据的查询、设置以及历史消息�
 
 IM文件服务，负责文件的上传和下载
 
++ [qtalk_serach](https://github.com/qunarcorp/qtalk_search)
+
+提供远程搜索人员和群的服务
+
 + redis
 
 IM缓存服务
@@ -48,6 +52,7 @@ IM数据库服务
 
 前提条件：
 
++ 服务器要求：centos7
 + 所有项目都安装到/home/work下面
 + 安装用户和用户组是：foo:foo，要保证foo用户有sudo权限
 + 家目录下有download文件夹，所有文件会下载到该文件夹下

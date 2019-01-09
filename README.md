@@ -115,9 +115,9 @@ host    all             all             ::1/128                 md5
 
 下载源码
 # cd /home/foo/download
-# git clone https://github.com/memacs/ejabberd-open.git
-# git clone https://github.com/memacs/or_open.git
-# git clone https://github.com/memacs/qtalk_cowboy_open.git
+# git clone https://github.com/qunarcorp/ejabberd-open.git
+# git clone https://github.com/qunarcorp/or_open.git
+# git clone https://github.com/qunarcorp/qtalk_cowboy_open.git
 
 
 openresry安装

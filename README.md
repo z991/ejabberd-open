@@ -1,6 +1,6 @@
-# QTalk EJABBERD
+# Startalk EJABBERD
 
-QTalk是基于ejabberd，根据业务需要改造而来。修改和扩展了很多
+Startalk(前身叫Qtalk，目前主体app尚未全部改名完毕。)是基于ejabberd，根据业务需要改造而来。修改和扩展了很多
 ejaberd不支持的功能。
 
 ## 关键功能
@@ -9,9 +9,9 @@ ejaberd不支持的功能。
 -   消息处理：通过ejabberd和kafka相连接，实现了消息的路由和订阅发布，可以对消息添加更丰富的处理逻辑。
 -   &#x2026;
 
-## QTalk模块
+## Startalk 模块
 
-### QTalk主要包含：
+### Startalk 主要包含：
 
 + [ejabberd](https://github.com/qunarcorp/ejabberd-open)
 
@@ -44,7 +44,7 @@ IM缓存服务
 
 IM数据库服务
 
-### QTalk各个模块之间的关系
+### Startalk 各个模块之间的关系
 
 ![architecture](image/arch.png)
 

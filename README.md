@@ -111,6 +111,10 @@ host    all             all             127.0.0.1/32            md5
 # IPv6 local connections:
 host    all             all             ::1/128                 md5
 
+重启下数据库
+
+sudo systemctl restart postgresql-11
+
 新建安装目录
 # sudo mkdir /home/work
 # sudo chown startalk:startalk /home/work

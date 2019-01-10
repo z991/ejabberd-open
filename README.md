@@ -53,13 +53,15 @@ IM数据库服务
 前提条件：
 
 + 服务器要求：centos7
++ hosts添加： 127.0.0.1 startalk.com
++ 主机名是：startalk.com
 + 所有项目都安装到/home/work下面
-+ 安装用户和用户组是：foo:foo，要保证foo用户有sudo权限
++ 安装用户和用户组是：startalk:startalk，要保证startalk用户有sudo权限
 + 家目录下有download文件夹，所有文件会下载到该文件夹下
 + 数据库用户名密码是ejabberd:123456，服务地址是：127.0.0.1
 + redis密码是：123456，服务地址是：127.0.0.1
 + 数据库初始化sql在doc目录下
-+ 保证可访问主机的：5222、5202、8080端口
++ 保证可访问主机的：5222、5202、8080端口（关掉防火墙：sudo systemctl stop firewalld.service）
 + IM服务的域名是:qtalk.test.org
 
 ```
@@ -111,25 +113,26 @@ host    all             all             ::1/128                 md5
 
 新建安装目录
 # sudo mkdir /home/work
-# sudo chown foo:foo /home/work
+# sudo chown startalk:startalk /home/work
 
 下载源码
-# cd /home/foo/download
+# cd /home/startalk/download
 # git clone https://github.com/qunarcorp/ejabberd-open.git
 # git clone https://github.com/qunarcorp/or_open.git
 # git clone https://github.com/qunarcorp/qtalk_cowboy_open.git
 
 
 openresry安装
-# cd /home/foo/download
+# cd /home/startalk/download
 # wget https://openresty.org/download/openresty-1.13.6.2.tar.gz
 # tar -zxvf openresty-1.13.6.2.tar.gz
+# cd openresty-1.13.6.2
 # ./configure --prefix=/home/work/openresty
 # make
 # make install
 
 or安装
-# cd /home/foo/download
+# cd /home/startalk/download
 # cd or_open
 # cp -rf conf /home/work/openresty/nginx
 # cp -rf lua_app /home/work/openresty/nginx
@@ -137,21 +140,21 @@ or安装
 or配置修改
 
 location的配置
-/home/work/openresry/nginx/conf/conf.d/subconf/or.server.location.package.qtapi.conf
+/home/work/openresty/nginx/conf/conf.d/subconf/or.server.location.package.qtapi.conf
 
 upstream的配置
-/home/work/openresry/nginx/conf/conf.d/upstreams/qt.qunar.com.upstream.conf
+/home/work/openresty/nginx/conf/conf.d/upstreams/qt.qunar.com.upstream.conf
 
 redis连接地址配置
-/home/work/openresry/nginx/lua_app/checks/qim/qtalkredis.lua
+/home/work/openresty/nginx/lua_app/checks/qim/qtalkredis.lua
 
 or操作
-启动：/home/work/openresry/nginx/sbin/nginx
-停止：/home/work/openresry/nginx/sbin/nginx -s stop
+启动：/home/work/openresty/nginx/sbin/nginx
+停止：/home/work/openresty/nginx/sbin/nginx -s stop
 
 
 安装erlang
-# cd /home/foo/download
+# cd /home/startalk/download
 # wget http://erlang.org/download/otp_src_19.3.tar.gz
 # tar -zxvf otp_src_19.3.tar.gz
 # cd otp_src_19.3
@@ -171,7 +174,7 @@ PATH=$PATH:$HOME/bin:$ERLANGPATH/bin
 # . .bash_profile
 
 安装ejabberd
-# cd /home/foo/download
+# cd /home/startalk/download
 # cd ejabberd-open/
 # ./configure --prefix=/home/work/ejabberd --with-erlang=/home/work/erlang1903 --enable-pgsql --enable-full-xml
 # make
@@ -193,7 +196,7 @@ ejabberd配置
 # ./sbin/ejabberdctl stop
 
 安装qtalk_cowboy
-# cd /home/foo/download
+# cd /home/startalk/download
 # cp -rf qtalk_cowboy_open /home/work/qtalk_cowboy
 # cd /home/work/qtalk_cowboy/
 # ./rebar compile
@@ -205,13 +208,13 @@ ejabberd配置
 
 
 安装java服务
-# cd /home/foo/download/
+# cd /home/startalk/download/
 # cp -rf or_open/deps/tomcat /home/work/
-# cd tomcat
+# cd /home/work/tomcat
 
 放置war
-+ 将im_http_service.war放到/home/work/tomcat/im_http_service/webapps下面
-+ 将qfproxy.war放到/home/work/tomcat/qfproxy/webapps下面
++ 将im_http_service.war解压到/home/work/tomcat/im_http_service/webapps/qfproxy下面
++ 将qfproxy.war解压到/home/work/tomcat/qfproxy/webapps/im_http_service下面
 
 
 修改导航地址：

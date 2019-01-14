@@ -82,38 +82,56 @@ requirepass 123456
 sudo redis-server /etc/redis.conf
  
 数据库安装
-sudo yum -y install https://download.postgresql.org/pub/repos/yum/11/redhat/rhel-7-x86_64/pgdg-centos11-11-2.noarch.rpm
-sudo yum -y install postgresql11 postgresql11-server postgresql11-libs
+１ 下载源代码
+wget https://ftp.postgresql.org/pub/source/v11.1/postgresql-11.1.tar.gz
  
-sudo /usr/pgsql-11/bin/postgresql-11-setup initdb
-sudo systemctl enable postgresql-11
-sudo systemctl start postgresql-11
+2 编译安装
+#解压
+tar -zxvf postgresql-11.1.tar.gz
+cd postgresql-11.1/
+sudo ./configure --prefix=/opt/pg11 --with-perl --with-libxml --with-libxslt
  
-修改posgres的密码
-sudo passwd postgres
+sudo make world
+#编译的结果最后必须如下，否则需要检查哪里有error
+#All of PostgreSQL successfully made. Ready to install.
+ 
+sudo make install-world
+#安装的结果做后必须如下，否则没有安装成功
+#PostgreSQL installation complete.
+ 
+3. 添加postgres OS用户
+sudo groupadd postgres
+  
+sudo useradd -g postgres postgres
+  
+sudo mkdir -p /export/pg110_data
+  
+sudo chown postgres:postgres /export/pg110_data
+ 
+4. 创建数据库实例
 su - postgres
-psql -f /home/monkboy/download/qtalk.sql
-psql
-# ALTER USER ejabberd WITH PASSWORD '123456';
-
-插入测试账号：
-# insert into host_info (host, description, host_admin) values ('qtalk.test.org', 'qtalk.test.org', 'test');
-# insert into host_users (host_id, user_id, user_name, department, dep1, pinyin, frozen_flag, version, user_type, hire_flag, gender, password, initialpwd, ps_deptid) values ('1', 'test', '测试账号', '/机器人', '机器人', 'test', '0', '1', 'U', '1', '1', '1234567890', '1', 'qtalk');
-# insert into vcard_version (username, version, profile_version, gender, host, url) values ('test', '1', '1', '1', 'qtalk.test.org', 'https://qt.qunar.com/file/v2/download/avatar/1af5bc967f8535a4af19eca10dc95cf1.png');
-
-修改配置文件
-[monkboy@monk download]$ sudo vim /var/lib/pgsql/11/data/pg_hba.conf
  
-# "local" is for Unix domain socket connections only
-local   all             all                                     peer
-# IPv4 local connections:
-host    all             all             127.0.0.1/32            md5
-# IPv6 local connections:
-host    all             all             ::1/128                 md5
-
-重启下数据库
-
-sudo systemctl restart postgresql-11
+/opt/pg11/bin/initdb -D /export/pg110_data
+ 
+5. 启动DB实例
+ 
+/opt/pg11/bin/pg_ctl -D /export/pg110_data start
+ 
+6. 初始化DB结构
+ 
+/opt/pg11/bin/psql -U postgres -d postgres -f qtalk.sql
+ 
+7. 初始化DB user: ejabberd的密码
+ 
+/opt/pg11/bin/psql -U postgres -d postgres -c "ALTER USER ejabberd WITH PASSWORD '123456';"
+ 
+8. 初始化测试数据
+ 
+/opt/pg11/bin/psql -U postgres -d ejabberd -c "
+insert into host_info (host, description, host_admin) values ('qtalk.test.org', 'qtalk.test.org', 'test');
+insert into host_users (host_id, user_id, user_name, department, dep1, pinyin, frozen_flag, version, user_type, hire_flag, gender, password, initialpwd, ps_deptid) values ('1', 'test', '测试账号', '/机器人', '机器人', 'test', '0', '1', 'U', '1', '1', '1234567890', '1', 'qtalk');
+insert into vcard_version (username, version, profile_version, gender, host, url) values ('test', '1', '1', '1', 'qtalk.test.org', 'https://qt.qunar.com/file/v2/download/avatar/1af5bc967f8535a4af19eca10dc95cf1.png');
+"
 
 新建安装目录
 # sudo mkdir /home/work

@@ -1,6 +1,6 @@
-# QTalk EJABBERD
+# Startalk EJABBERD
 
-QTalk是基于ejabberd，根据业务需要改造而来。修改和扩展了很多
+Startalk(前身叫Qtalk，目前主体app尚未全部改名完毕。)是基于ejabberd，根据业务需要改造而来。修改和扩展了很多
 ejaberd不支持的功能。
 
 ## 关键功能
@@ -9,9 +9,9 @@ ejaberd不支持的功能。
 -   消息处理：通过ejabberd和kafka相连接，实现了消息的路由和订阅发布，可以对消息添加更丰富的处理逻辑。
 -   &#x2026;
 
-## QTalk模块
+## Startalk 模块
 
-### QTalk主要包含：
+### Startalk 主要包含：
 
 + [ejabberd](https://github.com/qunarcorp/ejabberd-open)
 
@@ -32,6 +32,10 @@ IM HTTP接口服务，负责IM相关数据的查询、设置以及历史消息�
 
 IM文件服务，负责文件的上传和下载
 
++ [qtalk_serach](https://github.com/qunarcorp/qtalk_search)
+
+提供远程搜索人员和群的服务
+
 + redis
 
 IM缓存服务
@@ -40,7 +44,7 @@ IM缓存服务
 
 IM数据库服务
 
-### QTalk各个模块之间的关系
+### Startalk 各个模块之间的关系
 
 ![architecture](image/arch.png)
 
@@ -48,13 +52,16 @@ IM数据库服务
 
 前提条件：
 
++ 服务器要求：centos7
++ hosts添加： 127.0.0.1 startalk.com
++ 主机名是：startalk.com
 + 所有项目都安装到/home/work下面
-+ 安装用户和用户组是：foo:foo，要保证foo用户有sudo权限
++ 安装用户和用户组是：startalk:startalk，要保证startalk用户有sudo权限
 + 家目录下有download文件夹，所有文件会下载到该文件夹下
 + 数据库用户名密码是ejabberd:123456，服务地址是：127.0.0.1
 + redis密码是：123456，服务地址是：127.0.0.1
 + 数据库初始化sql在doc目录下
-+ 保证可访问主机的：5222、5202、8080端口
++ 保证可访问主机的：5222、5202、8080端口（关掉防火墙：sudo systemctl stop firewalld.service）
 + IM服务的域名是:qtalk.test.org
 
 ```
@@ -75,56 +82,79 @@ requirepass 123456
 sudo redis-server /etc/redis.conf
  
 数据库安装
-sudo yum -y install https://download.postgresql.org/pub/repos/yum/11/redhat/rhel-7-x86_64/pgdg-centos11-11-2.noarch.rpm
-sudo yum -y install postgresql11 postgresql11-server postgresql11-libs
+１ 下载源代码
+wget https://ftp.postgresql.org/pub/source/v11.1/postgresql-11.1.tar.gz
  
-sudo /usr/pgsql-11/bin/postgresql-11-setup initdb
-sudo systemctl enable postgresql-11
-sudo systemctl start postgresql-11
+2 编译安装
+#解压
+tar -zxvf postgresql-11.1.tar.gz
+cd postgresql-11.1/
+sudo ./configure --prefix=/opt/pg11 --with-perl --with-libxml --with-libxslt
  
-修改posgres的密码
-sudo passwd postgres
+sudo make world
+#编译的结果最后必须如下，否则需要检查哪里有error
+#All of PostgreSQL successfully made. Ready to install.
+ 
+sudo make install-world
+#安装的结果做后必须如下，否则没有安装成功
+#PostgreSQL installation complete.
+ 
+3. 添加postgres OS用户
+sudo groupadd postgres
+  
+sudo useradd -g postgres postgres
+  
+sudo mkdir -p /export/pg110_data
+  
+sudo chown postgres:postgres /export/pg110_data
+ 
+4. 创建数据库实例
 su - postgres
-psql -f /home/monkboy/download/qtalk.sql
-psql
-# ALTER USER ejabberd WITH PASSWORD '123456';
-
-插入测试账号：
-# insert into host_info (host, description, host_admin) values ('qtalk.test.org', 'qtalk.test.org', 'test');
-# insert into host_users (host_id, user_id, user_name, department, dep1, pinyin, frozen_flag, version, user_type, hire_flag, gender, password, initialpwd, ps_deptid) values ('1', 'test', '测试账号', '/机器人', '机器人', 'test', '0', '1', 'U', '1', '1', '1234567890', '1', 'qtalk');
-# insert into vcard_version (username, version, profile_version, gender, host, url) values ('test', '1', '1', '1', 'qtalk.test.org', 'https://qt.qunar.com/file/v2/download/avatar/1af5bc967f8535a4af19eca10dc95cf1.png');
-
-修改配置文件
-[monkboy@monk download]$ sudo vim /var/lib/pgsql/11/data/pg_hba.conf
  
-# "local" is for Unix domain socket connections only
-local   all             all                                     peer
-# IPv4 local connections:
-host    all             all             127.0.0.1/32            md5
-# IPv6 local connections:
-host    all             all             ::1/128                 md5
+/opt/pg11/bin/initdb -D /export/pg110_data
+ 
+5. 启动DB实例
+ 
+/opt/pg11/bin/pg_ctl -D /export/pg110_data start
+ 
+6. 初始化DB结构
+ 
+/opt/pg11/bin/psql -U postgres -d postgres -f qtalk.sql
+ 
+7. 初始化DB user: ejabberd的密码
+ 
+/opt/pg11/bin/psql -U postgres -d postgres -c "ALTER USER ejabberd WITH PASSWORD '123456';"
+ 
+8. 初始化测试数据
+ 
+/opt/pg11/bin/psql -U postgres -d ejabberd -c "
+insert into host_info (host, description, host_admin) values ('qtalk.test.org', 'qtalk.test.org', 'test');
+insert into host_users (host_id, user_id, user_name, department, dep1, pinyin, frozen_flag, version, user_type, hire_flag, gender, password, initialpwd, ps_deptid) values ('1', 'test', '测试账号', '/机器人', '机器人', 'test', '0', '1', 'U', '1', '1', '1234567890', '1', 'qtalk');
+insert into vcard_version (username, version, profile_version, gender, host, url) values ('test', '1', '1', '1', 'qtalk.test.org', 'https://qt.qunar.com/file/v2/download/avatar/1af5bc967f8535a4af19eca10dc95cf1.png');
+"
 
 新建安装目录
 # sudo mkdir /home/work
-# sudo chown foo:foo /home/work
+# sudo chown startalk:startalk /home/work
 
 下载源码
-# cd /home/foo/download
-# git clone https://github.com/memacs/ejabberd-open.git
-# git clone https://github.com/memacs/or_open.git
-# git clone https://github.com/memacs/qtalk_cowboy_open.git
+# cd /home/startalk/download
+# git clone https://github.com/qunarcorp/ejabberd-open.git
+# git clone https://github.com/qunarcorp/or_open.git
+# git clone https://github.com/qunarcorp/qtalk_cowboy_open.git
 
 
 openresry安装
-# cd /home/foo/download
+# cd /home/startalk/download
 # wget https://openresty.org/download/openresty-1.13.6.2.tar.gz
 # tar -zxvf openresty-1.13.6.2.tar.gz
+# cd openresty-1.13.6.2
 # ./configure --prefix=/home/work/openresty
 # make
 # make install
 
 or安装
-# cd /home/foo/download
+# cd /home/startalk/download
 # cd or_open
 # cp -rf conf /home/work/openresty/nginx
 # cp -rf lua_app /home/work/openresty/nginx
@@ -132,21 +162,21 @@ or安装
 or配置修改
 
 location的配置
-/home/work/openresry/nginx/conf/conf.d/subconf/or.server.location.package.qtapi.conf
+/home/work/openresty/nginx/conf/conf.d/subconf/or.server.location.package.qtapi.conf
 
 upstream的配置
-/home/work/openresry/nginx/conf/conf.d/upstreams/qt.qunar.com.upstream.conf
+/home/work/openresty/nginx/conf/conf.d/upstreams/qt.qunar.com.upstream.conf
 
 redis连接地址配置
-/home/work/openresry/nginx/lua_app/checks/qim/qtalkredis.lua
+/home/work/openresty/nginx/lua_app/checks/qim/qtalkredis.lua
 
 or操作
-启动：/home/work/openresry/nginx/sbin/nginx
-停止：/home/work/openresry/nginx/sbin/nginx -s stop
+启动：/home/work/openresty/nginx/sbin/nginx
+停止：/home/work/openresty/nginx/sbin/nginx -s stop
 
 
 安装erlang
-# cd /home/foo/download
+# cd /home/startalk/download
 # wget http://erlang.org/download/otp_src_19.3.tar.gz
 # tar -zxvf otp_src_19.3.tar.gz
 # cd otp_src_19.3
@@ -166,7 +196,7 @@ PATH=$PATH:$HOME/bin:$ERLANGPATH/bin
 # . .bash_profile
 
 安装ejabberd
-# cd /home/foo/download
+# cd /home/startalk/download
 # cd ejabberd-open/
 # ./configure --prefix=/home/work/ejabberd --with-erlang=/home/work/erlang1903 --enable-pgsql --enable-full-xml
 # make
@@ -188,7 +218,7 @@ ejabberd配置
 # ./sbin/ejabberdctl stop
 
 安装qtalk_cowboy
-# cd /home/foo/download
+# cd /home/startalk/download
 # cp -rf qtalk_cowboy_open /home/work/qtalk_cowboy
 # cd /home/work/qtalk_cowboy/
 # ./rebar compile
@@ -200,13 +230,13 @@ ejabberd配置
 
 
 安装java服务
-# cd /home/foo/download/
+# cd /home/startalk/download/
 # cp -rf or_open/deps/tomcat /home/work/
-# cd tomcat
+# cd /home/work/tomcat
 
 放置war
-+ 将im_http_service.war放到/home/work/tomcat/im_http_service/webapps下面
-+ 将qfproxy.war放到/home/work/tomcat/qfproxy/webapps下面
++ 将im_http_service.war解压到/home/work/tomcat/im_http_service/webapps/qfproxy下面
++ 将qfproxy.war解压到/home/work/tomcat/qfproxy/webapps/im_http_service下面
 
 
 修改导航地址：
@@ -266,10 +296,13 @@ project.host.and.port=http://ip:8080
 
 参考文档[setting.md](doc/setting.md)
 
+## 接口文档
+
+参考文档[interface.md](doc/interface.md)
+
 ## 开发指南
 
 - [developer guide](https://docs.ejabberd.im/developer/guide/)
--
 
 ## 问题反馈
 

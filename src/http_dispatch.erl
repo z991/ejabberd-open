@@ -31,5 +31,10 @@ handle_process([<<"del_muc_user">>], Req) ->
     http_muc_del_user:handle(Req);
 handle_process([<<"destroy_muc">>], Req) ->
     http_muc_destroy:handle(Req);
+handle_process([<<"muc_users">>], Req) ->
+    http_muc_users:handle(Req);
+handle_process([<<"send_notice_vcard">>], Req) ->
+    http_muc_notice_vcard:handle(Req);
+
 handle_process(_, Req) ->
     http_utils:cowboy_req_reply_json(http_utils:gen_fail_result(1, <<"request not defined">>), Req).

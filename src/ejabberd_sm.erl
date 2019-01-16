@@ -1207,7 +1207,7 @@ do_send_push_message(From, To, FromHost, ToHost, Msg, ID, InsertTime, PushUrl) -
                  proplists:get_value("usrType", ChannelIdJson, ?USRTYPE)}
         end,
     
-        MsgContent = rfc4627:encode({obj, [{"type", <<"chat">>},
+        MsgContent = rfc4627:encode({obj, [{"topic", <<"chat">>},
                                            {"m_from", LUser},
                                            {"from_host", FromHost},
                                            {"m_to", To},

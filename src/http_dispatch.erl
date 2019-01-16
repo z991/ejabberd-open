@@ -35,6 +35,9 @@ handle_process([<<"muc_users">>], Req) ->
     http_muc_users:handle(Req);
 handle_process([<<"send_notice_vcard">>], Req) ->
     http_muc_notice_vcard:handle(Req);
-
+handle_process([<<"management">>, <<"change_muc_opts">>], Req) ->
+    http_management_change_muc_opts:handle(Req);
+handle_process([<<"management">>, <<"get_muc_opts">>], Req) ->
+    http_management_get_muc_opts:handle(Req);
 handle_process(_, Req) ->
     http_utils:cowboy_req_reply_json(http_utils:gen_fail_result(1, <<"request not defined">>), Req).

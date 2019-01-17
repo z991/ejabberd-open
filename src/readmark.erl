@@ -129,3 +129,4 @@ do_send_push_message(From, To, Packet, PushUrl) ->
                                        {"create_time", Time},
                                        {"type", <<"readmark">>},
                                        {"msg_id", LId}]}),
+    ok.

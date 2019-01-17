@@ -1222,5 +1222,7 @@ do_send_push_message(From, To, FromHost, ToHost, Msg, ID, InsertTime, PushUrl) -
                                            {"usrType", UsrType},
                                            {"msg_id", ID}]}),
 
-        http_client:http_post(PushUrl, [{"connection", "close"}], "application/json", MsgContent, [], [])
+        case catch http_client:http_post(binary_to_list(PushUrl), [{"connection", "close"}], "application/json", MsgContent, [], []) of
+            Res -> ?DEBUG("the res is ~p~n", [Res])
+        end
     end.

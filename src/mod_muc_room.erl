@@ -6152,7 +6152,8 @@ do_send_push_message(Time,Nick, FromJID, Packet, StateData, PushUrl) ->
         _ -> Nick
     end,
 
-    MsgContent = rfc4627:encode({obj, [{"type", <<"groupchat">>},
+    MsgContent = rfc4627:encode({obj, [{"topic", <<"groupchat">>},
+    	                               {"type", <<"groupchat">>},
                                        {"muc_room_name", StateData#state.room},
                                        {"room_host", StateData#state.host},
                                        {"host", FromJID#jid.lserver},

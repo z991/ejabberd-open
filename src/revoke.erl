@@ -8,7 +8,6 @@ revoke_message(From,To,Packet) ->
     case qtalk_public:is_conference_server(From#jid.lserver) of
         true -> ok;
         _ ->
-            %%send_kafka_msg(From,To,Packet, <<"chat">>, [])
             revoke_chat_message(From,To,Packet)
     end.
 
@@ -33,7 +32,7 @@ get_revoke_message_args(Packet) ->
     case rfc4627:decode(Body) of  
         {ok,{obj,Args},[]} -> Args;
         _ -> []
-    end.    
+    end.
 
 update_msg_by_id(Server,From,To,Packet,Msg_id) ->
     case catch ejabberd_sql:sql_query(Server, [<<"select m_from,m_to,m_body ,msg_id ,extract(epoch from create_time)::bigint from msg_history where msg_id = '">>,Msg_id,<<"';">>]) of

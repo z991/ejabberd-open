@@ -5,20 +5,21 @@
 -include("jlib.hrl").
 -include("logger.hrl").
 
-readmark_message(From, To, Packet) ->                                                                                                                                                                                                                                        
-        case fxml:get_tag_attr_s(<<"read_type">>, Packet) of                                                                                                                                                                                                                  
-        <<"0">> ->                                                                                                                                                                                                                                                            
-                mark_all_msg(From,To,Packet);                                                                                                                                                                                                                                 
-        <<"1">> ->                                                                                                                                                                                                                                                            
-                chat_readmark_msg(From,To,Packet, <<"3">>);                                                                                                                                                                                                                            
-        <<"2">> ->                                                                                                                                                                                                                                                            
+readmark_message(From, To, Packet) ->
+        send_push_message(From, To, Packet),
+        case fxml:get_tag_attr_s(<<"read_type">>, Packet) of                                                                                                                                                                                                                 
+        <<"0">> ->
+                mark_all_msg(From,To,Packet);
+        <<"1">> ->
+                chat_readmark_msg(From,To,Packet, <<"3">>);
+        <<"2">> ->
                 groupchat_readmark_msg(From,To,Packet);
-        <<"3">> ->                                                                                                                                                                                                                                                            
-                chat_readmark_msg(From,To,Packet, <<"1">>);   
-        <<"4">> ->                                                                                                                                                                                                                                                            
-                chat_readmark_msg(From,To,Packet, <<"3">>);                                                                                                                                                                                                                        
-        _ ->                                                                                                                                                                                                                                                                  
-                ok                                                                                                                                                                                                                                                            
+        <<"3">> ->
+                chat_readmark_msg(From,To,Packet, <<"1">>);
+        <<"4">> ->
+                chat_readmark_msg(From,To,Packet, <<"3">>);
+        _ ->
+                ok
         end.
 
 mark_all_msg(From,_To,Packet) ->
@@ -103,3 +104,28 @@ update_muc_readmark(Host,Muc,User,Time) when is_integer(Time) ->
     end;
 update_muc_readmark(_Host, Muc, User, Time) ->
     ?INFO_MSG("update_readmark_date Muc ~p,User ~p, Time is ~p ~n",[Muc,User,Time]).
+
+send_push_message(From, To, Packet) ->
+    PushUrl = ejabberd_config:get_option(push_url, fun(Url)-> Url end, undefined),
+    case PushUrl of
+        undefined -> ok;
+        _ -> do_send_push_message(From, To, Packet, PushUrl)
+    end.
+
+do_send_push_message(From, To, Packet, PushUrl) ->
+    Type = fxml:get_tag_attr_s(<<"type">>, Packet),
+    LFrom = From#jid.user,
+    LTo = To#jid.user,
+    From_host = From#jid.lserver,
+    To_host = To#jid.lserver,
+    LBody = fxml:element_to_binary(Packet),
+    LId = fxml:get_tag_attr_s(<<"id">>, fxml:get_subtag(Packet,<<"body">>)),
+    Time = binary_to_integer(fxml:get_tag_attr_s(<<"msec_times">>, Packet)),
+    MsgContent = rfc4627:encode({obj, [{"m_from", LFrom},
+                                       {"from_host", From_host},
+                                       {"m_to", LTo},
+                                       {"to_host", To_host},
+                                       {"m_body", LBody},
+                                       {"create_time", Time},
+                                       {"type", <<"readmark">>},
+                                       {"msg_id", LId}]}),

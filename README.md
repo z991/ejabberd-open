@@ -135,30 +135,30 @@ insert into vcard_version (username, version, profile_version, gender, host, url
 "
 
 新建安装目录
-# sudo mkdir /startalk
-# sudo chown startalk:startalk /startalk
+$ sudo mkdir /startalk
+$ sudo chown startalk:startalk /startalk
 
 下载源码
-# cd /home/startalk/download
-# git clone https://github.com/qunarcorp/ejabberd-open.git
-# git clone https://github.com/qunarcorp/or_open.git
-# git clone https://github.com/qunarcorp/qtalk_cowboy_open.git
+$ cd /home/startalk/download
+$ git clone https://github.com/qunarcorp/ejabberd-open.git
+$ git clone https://github.com/qunarcorp/or_open.git
+$ git clone https://github.com/qunarcorp/qtalk_cowboy_open.git
 
 
 openresry安装
-# cd /home/startalk/download
-# wget https://openresty.org/download/openresty-1.13.6.2.tar.gz
-# tar -zxvf openresty-1.13.6.2.tar.gz
-# cd openresty-1.13.6.2
-# ./configure --prefix=/startalk/openresty --with-http_auth_request_module
-# make
-# make install
+$ cd /home/startalk/download
+$ wget https://openresty.org/download/openresty-1.13.6.2.tar.gz
+$ tar -zxvf openresty-1.13.6.2.tar.gz
+$ cd openresty-1.13.6.2
+$ ./configure --prefix=/startalk/openresty --with-http_auth_request_module
+$ make
+$ make install
 
 or安装
-# cd /home/startalk/download
-# cd or_open
-# cp -rf conf /startalk/openresty/nginx
-# cp -rf lua_app /startalk/openresty/nginx
+$ cd /home/startalk/download
+$ cd or_open
+$ cp -rf conf /startalk/openresty/nginx
+$ cp -rf lua_app /startalk/openresty/nginx
 
 or配置修改
 
@@ -177,74 +177,66 @@ or操作
 
 
 安装erlang
-# cd /home/startalk/download
-# wget http://erlang.org/download/otp_src_19.3.tar.gz
-# tar -zxvf otp_src_19.3.tar.gz
-# cd otp_src_19.3
-# ./configure --prefix=/startalk/erlang1903
-# make
-# make install
+$ cd /home/startalk/download
+$ wget http://erlang.org/download/otp_src_19.3.tar.gz
+$ tar -zxvf otp_src_19.3.tar.gz
+$ cd otp_src_19.3
+$ ./configure --prefix=/startalk/erlang1903
+$ make
+$ make install
 
 添加PATH
-# vim ~/.bash_profile
+$ vim ~/.bash_profile
  
 ----------------------------------
-# User specific environment and startup programs
+$ User specific environment and startup programs
 ERLANGPATH=/startalk/erlang1903
 PATH=$PATH:$HOME/bin:$ERLANGPATH/bin
 ----------------------------------
  
-# . .bash_profile
+$ . .bash_profile
 
 安装ejabberd
-# cd /home/startalk/download
-# cd ejabberd-open/
-# ./configure --prefix=/startalk/ejabberd --with-erlang=/startalk/erlang1903 --enable-pgsql --enable-full-xml
-# make
-# make install
-# cp ejabberd.yml.qunar /startalk/ejabberd/etc/ejabberd/ejabberd.yml
-# cp ejabberdctl.cfg.qunar /startalk/ejabberd/etc/ejabberd/ejabberdctl.cfg
-# vim /startalk/ejabberd/etc/ejabberd/ejabberd.yml
-# vim /startalk/ejabberd/etc/ejabberd/ejabberdctl.cfg
+$ cd /home/startalk/download
+$ cd ejabberd-open/
+$ ./configure --prefix=/startalk/ejabberd --with-erlang=/startalk/erlang1903 --enable-pgsql --enable-full-xml
+$ make
+$ make install
+$ cp ejabberd.yml.qunar /startalk/ejabberd/etc/ejabberd/ejabberd.yml
+$ cp ejabberdctl.cfg.qunar /startalk/ejabberd/etc/ejabberd/ejabberdctl.cfg
+$ vim /startalk/ejabberd/etc/ejabberd/ejabberd.yml
+$ vim /startalk/ejabberd/etc/ejabberd/ejabberdctl.cfg
 
 ejabberd配置
 参考 https://github.com/qunarcorp/ejabberd-open/blob/master/doc/setting.md
 
 启动ejabberd
 
-# cd /startalk/ejabberd
+$ cd /startalk/ejabberd
 启动
-# ./sbin/ejabberdctl start
+$ ./sbin/ejabberdctl start
 停止
-# ./sbin/ejabberdctl stop
+$ ./sbin/ejabberdctl stop
 
 安装qtalk_cowboy
-# cd /home/startalk/download
-# cp -rf qtalk_cowboy_open /startalk/qtalk_cowboy
-# cd /startalk/qtalk_cowboy/
-# ./rebar compile
+$ cd /home/startalk/download
+$ cp -rf qtalk_cowboy_open /startalk/qtalk_cowboy
+$ cd /startalk/qtalk_cowboy/
+$ ./rebar compile
 
 启动qtalk_cowboy
-# ./bin/ejb_http_server start
+$ ./bin/ejb_http_server start
 停止qtalk_cowboy
-# ./bin/ejb_http_server stop
+$ ./bin/ejb_http_server stop
 
 
 安装java服务
-# cd /home/startalk/download/
-# cp -rf or_open/deps/tomcat /startalk/
-# cd /startalk/tomcat
-
-放置war(默认已经解压到目录下了，如果要更改文件，需要重新打war包，删除已有的文件，然后解压到目录下)
-
-rm -rf /startalk/tomcat/im_http_service/webapps/qfproxy/*
-rm -rf /startalk/tomcat/im_http_service/webapps/im_http_service/*
-+ 将im_http_service.war解压到/startalk/tomcat/im_http_service/webapps/qfproxy下面
-+ 将qfproxy.war解压到/startalk/tomcat/qfproxy/webapps/im_http_service下面
-
+$ cd /home/startalk/download/
+$ cp -rf or_open/deps/tomcat /startalk/
+$ cd /startalk/tomcat
 
 修改导航地址：
-#  vim /startalk/tomcat/im_http_service/webapps/im_http_service/WEB-INF/classes/nav.json
+$  vim /startalk/tomcat/im_http_service/webapps/im_http_service/WEB-INF/classes/nav.json
 
 -
 {
@@ -277,20 +269,30 @@ rm -rf /startalk/tomcat/im_http_service/webapps/im_http_service/*
 
 修改文件服务器配置
 
-# vim /startalk/tomcat/qfproxy/webapps/qfproxy/WEB-INF/classes/qfproxy.properties
+$ vim /startalk/tomcat/qfproxy/webapps/qfproxy/WEB-INF/classes/qfproxy.properties
 
 project.host.and.port=http://ip:8080
 
 将ip替换成对应机器的ip地址
 
+修改推送服务的地址
+
+$ vim /startalk/tomcat/push_service/webapps/push_service/WEB-INF/classes/app.properties
+#使用星语push url
+qtalk_push_url=http://ip:8091/qtapi/token/sendPush.qunar
+#使用星语push key
+qtalk_push_key=12342a14-e6c0-463f-90a0-92b8faec4063
+
 启动java服务
-# cd /startalk/tomcat/im_http_service
-# ./bin/startup.sh
+$ cd /startalk/tomcat/im_http_service
+$ ./bin/startup.sh
 
 
-# cd /startalk/tomcat/qfproxy
-# ./bin/startup.sh
+$ cd /startalk/tomcat/qfproxy
+$ ./bin/startup.sh
 
+$ cd /startalk/tomcat/push_service
+$ ./bin/startup.sh
 
 客户端配置导航地址：http://ip:8080/newapi/nck/qtalk_nav.qunar，使用账号：test，密码：1234567890登陆
 ```

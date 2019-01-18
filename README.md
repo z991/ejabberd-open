@@ -77,6 +77,7 @@ sudo vim /etc/redis.conf
  
 daemonize yes
 requirepass 123456
+maxmemory 134217728   ##128Mbytes
  
 启动redis
 sudo redis-server /etc/redis.conf
@@ -149,7 +150,7 @@ openresry安装
 # wget https://openresty.org/download/openresty-1.13.6.2.tar.gz
 # tar -zxvf openresty-1.13.6.2.tar.gz
 # cd openresty-1.13.6.2
-# ./configure --prefix=/startalk/openresty
+# ./configure --prefix=/startalk/openresty --with-http_auth_request_module
 # make
 # make install
 
@@ -234,7 +235,10 @@ ejabberd配置
 # cp -rf or_open/deps/tomcat /startalk/
 # cd /startalk/tomcat
 
-放置war
+放置war(默认已经解压到目录下了，如果要更改文件，需要重新打war包，删除已有的文件，然后解压到目录下)
+
+rm -rf /startalk/tomcat/im_http_service/webapps/qfproxy
+rm -rf /startalk/tomcat/im_http_service/webapps/im_http_service
 + 将im_http_service.war解压到/startalk/tomcat/im_http_service/webapps/qfproxy下面
 + 将qfproxy.war解压到/startalk/tomcat/qfproxy/webapps/im_http_service下面
 
@@ -281,12 +285,11 @@ project.host.and.port=http://ip:8080
 
 启动java服务
 # cd /startalk/tomcat/im_http_service
-# ./tomcat.sh start
+# ./bin/startup.sh
 
 
 # cd /startalk/tomcat/qfproxy
-# mkdir upload //新建文件存储的目录
-# ./tomcat.sh start
+# ./bin/startup.sh
 
 
 客户端配置导航地址：http://ip:8080/newapi/nck/qtalk_nav.qunar，使用账号：test，密码：1234567890登陆

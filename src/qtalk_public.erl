@@ -37,7 +37,10 @@ get_nick(User) ->
 		
 
 get_nick(User,Host) ->
-    <<User/binary, "_", Host/binary>>.
+    case ejabberd_sql:sql_query(Host, [<<"select user_name from host_users left join host_info on host_users.host_id = host_info.id where user_id='">>, User, <<"' and host='">>, Host, <<"';">>]) of
+        {selected,[<<"user_name">>], [[Name]]} -> Name;
+        _ -> <<User/binary, "_", Host/binary>>
+    end.
 
 %%%%%%%%--------------------------------------------------------------------
 %%%%%%%% @date 2017-03

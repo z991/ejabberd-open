@@ -6165,4 +6165,4 @@ do_send_push_message(Time,Nick, FromJID, Packet, StateData, PushUrl) ->
                                        {"msg_id", Msg_Id},
                                        {"realfrom", RealFrom},
                                        {"userlist", UL}]}),
-    http_client:http_post(PushUrl, [{"connection", "close"}], "application/json", MsgContent, [], []).
+    http_client:http_post(binary_to_list(PushUrl), [{"connection", "close"}], "application/json", MsgContent, [], []).

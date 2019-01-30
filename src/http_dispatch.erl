@@ -11,7 +11,7 @@ init(_Transport, Req, []) ->
 
 handle(Req, State) ->
     {Path, _} = cowboy_req:path_info(Req),
-    Req1 = handle_process(Path, Req),
+    {ok, Req1} = handle_process(Path, Req),
     {ok, Req1, State}.
 
 terminate(_Reason, _Req, _State) ->
@@ -39,5 +39,11 @@ handle_process([<<"management">>, <<"change_muc_opts">>], Req) ->
     http_management_change_muc_opts:handle(Req);
 handle_process([<<"management">>, <<"get_muc_opts">>], Req) ->
     http_management_get_muc_opts:handle(Req);
+handle_process([<<"auth_uk">>], Req) ->
+    http_auth_uk:handle(Req);
+handle_process([<<"get_user_nick">>], Req) ->
+    http_get_user_nick:handle(Req);
+handle_process([<<"send_message">>], Req) ->
+    http_send_message:handle(Req);
 handle_process(_, Req) ->
     http_utils:cowboy_req_reply_json(http_utils:gen_fail_result(1, <<"request not defined">>), Req).

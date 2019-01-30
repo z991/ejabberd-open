@@ -39,4 +39,4 @@ create_muc(Server,Args) ->
             end, Res);
         _ -> []
     end,
-    http_utils:gen_result(true, <<"0">>,<<"">>, Infos).
+    http_utils:gen_result(true, 0,<<"">>, Infos).

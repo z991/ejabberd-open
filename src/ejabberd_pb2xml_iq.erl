@@ -138,23 +138,6 @@ make_iq_message("GET_USER_KEY", _Value, _From, To, _Type, ID, _Body, _Bodys) ->
           attrs = make_iq_master_attrs(To,ID,<<"get">>),
         children = [#xmlel{name = <<"key">>,attrs = [{<<"xmlns">>,<<"urn:xmpp:key">>}],children = []}]},
     {xmlstreamelement,Xml};
-make_iq_message("GET_USER_MASK", _Value, _From, To, _Type, ID, _Body, _Bodys) ->
-    Xml = #xmlel{name = <<"iq">>,
-          attrs = make_iq_master_attrs(To,ID,<<"get">>),
-        children = [#xmlel{name = <<"mask_user">>,attrs = [{<<"xmlns">>,<<"jabber:x:mask_user">>}],children = []}]},
-    {xmlstreamelement,Xml};
-make_iq_message("SET_USER_MASK", _Value, _From, To, _Type, ID, Body, _Bodys) ->
-    Xml = #xmlel{name = <<"iq">>,
-          attrs = make_iq_master_attrs(To,ID,<<"set">>),
-          children = [ejabberd_pb2xml_public:make_attrs_xmlel(
-                        list_to_binary(Body#messagebody.value),Body#messagebody.headers,<<"jabber:x:mask_user">>,[])]},
-    {xmlstreamelement,Xml};
-make_iq_message("CANCEL_USER_MASK", _Value, _From, To, _Type, ID, Body, _Bodys) ->
-    Xml = #xmlel{name = <<"iq">>,
-          attrs = make_iq_master_attrs(To,ID,<<"set">>),
-          children = [ejabberd_pb2xml_public:make_attrs_xmlel(
-                        list_to_binary(Body#messagebody.value),Body#messagebody.headers,<<"jabber:x:mask_user">>,[])]},
-    {xmlstreamelement,Xml};
 make_iq_message("SET_ADMIN", _Value, _From, To, _Type, ID, Body, _Bodys) ->
     Xml = #xmlel{name = <<"iq">>,
           attrs = make_iq_master_attrs(To,ID,<<"set">>),
@@ -196,50 +179,6 @@ make_iq_message("PING", _Value, _From, To, _Type, ID, _Body, _Bodys) ->
         #xmlel{name = <<"iq">>,
             attrs = make_iq_master_attrs(To,ID,<<"get">>),
                  children = [#xmlel{name = <<"ping">>,attrs = [{<<"xmlns">>,<<"urn:xmpp:ping">>}],children = []}]},
-    {xmlstreamelement,Xml};
-make_iq_message("GET_SPUSH_VOICE", _Value, _From, To, _Type, ID, _Body, _Bodys) ->
-    Xml = 
-        #xmlel{name = <<"iq">>,
-            attrs = make_iq_master_attrs(To,ID,<<"get">>),
-                 children = [#xmlel{name = <<"mac_push_notice">>,attrs = [{<<"xmlns">>,?NS_MAC_PUSH_NOTICE}],children = []}]},
-    {xmlstreamelement,Xml};
-make_iq_message("ADD_SPUSH_VOICE", Value, _From, To, _Type, ID, _Body, _Bodys) ->
-    Xml = 
-        #xmlel{name = <<"iq">>,
-            attrs = make_iq_master_attrs(To,ID,<<"set">>),
-                 children = [#xmlel{name = <<"mac_push_notice">>,attrs = [{<<"xmlns">>,?NS_MAC_PUSH_NOTICE},{<<"jid">>,list_to_binary(Value)}],children = []}]},
-    {xmlstreamelement,Xml};
-make_iq_message("CANCEL_SPUSH_VOICE", Value, _From, To, _Type, ID, _Body, _Bodys) ->
-    Xml = 
-        #xmlel{name = <<"iq">>,
-            attrs = make_iq_master_attrs(To,ID,<<"set">>),
-                 children = [#xmlel{name = <<"cancel_mac_push_notice">>,attrs = [{<<"xmlns">>,?NS_MAC_PUSH_NOTICE},{<<"jid">>,list_to_binary(Value)}],children = []}]},
-    {xmlstreamelement,Xml};
-make_iq_message("GET_VUSER", _Value, _From, To, _Type, ID, _Body, _Bodys) ->
-    Xml = 
-        #xmlel{name = <<"iq">>,
-            attrs = make_iq_master_attrs(To,ID,<<"get">>),
-                 children = [#xmlel{name = <<"get_virtual_user">>,attrs = [{<<"xmlns">>,<<"jabber:x:virtual_user">>}],children = []}]},
-    {xmlstreamelement,Xml};
-make_iq_message("GET_VUSER_ROLE", _Value, _From, To, _Type, ID, _Body, _Bodys) ->
-    Xml = 
-        #xmlel{name = <<"iq">>,
-            attrs = make_iq_master_attrs(To,ID,<<"get">>),
-                 children = [#xmlel{name = <<"get_virtual_user_role">>,attrs = [{<<"xmlns">>,<<"jabber:x:virtual_user">>}],children = []}]},
-    {xmlstreamelement,Xml};
-make_iq_message("RUSER_START_SESSION", Value, _From, To, _Type, ID, _Body, _Bodys) ->
-    Xml = 
-        #xmlel{name = <<"iq">>,
-            attrs = make_iq_master_attrs(To,ID,<<"get">>),
-                 children = [#xmlel{name = <<"real_user_start_session">>,
-                        attrs = [{<<"xmlns">>,<<"jabber:x:virtual_user">>},{<<"jid">>,list_to_binary(Value)}],children = []}]},
-    {xmlstreamelement,Xml};
-make_iq_message("RUSER_END_SESSION", Value, _From, To, _Type, ID, _Body, _Bodys) ->
-    Xml = 
-        #xmlel{name = <<"iq">>,
-            attrs = make_iq_master_attrs(To,ID,<<"set">>),
-                 children = [#xmlel{name = <<"real_user_end_session">>,
-                        attrs = [{<<"xmlns">>,<<"jabber:x:virtual_user">>},{<<"jid">>,list_to_binary(Value)}],children = []}]},
     {xmlstreamelement,Xml};
 make_iq_message(_,_,_,_,_,_,_,_) ->
     false.

@@ -39,13 +39,13 @@ get_xmppmessage_value(_) ->
     <<"">>.
 
 make_xmpp_message(From,To,RealFrom,RealTo,Type,Msg_type,Client_type,Client_ver,ID,Headers,Cdata) ->
-    ?DEBUG("Pb Type ~p n",[Type]),
     Channel_id =    get_header_definedkey('binary','StringHeaderTypeChannelId',Headers), 
     Ex_Info =       get_header_definedkey('unicode','StringHeaderTypeExtendInfo',Headers), 
     Backup_Info =   get_header_definedkey('unicode','StringHeaderTypeBackupInfo',Headers), 
     Read_Type =     get_header_definedkey('unicode','StringHeaderTypeReadType',Headers), 
-    Auto_reply =    get_header_key("auto_reply",Headers,<<"true">>),
-    QchatID =    get_header_key("qchatid",Headers,'null'),
+    Auto_reply =    get_header_key("auto_reply",Headers),
+    QchatID =    get_header_key("qchatid",Headers),
+    ?DEBUG("the auto reply is ~p, the qchatid is ~p~n", [Auto_reply, QchatID]),
 
     Attrs = make_xmpp_message_attrs(ejabberd_pb2xml_public:list_and_character_to_binary(From),
             ejabberd_pb2xml_public:list_and_character_to_binary(To), 
@@ -76,14 +76,9 @@ make_xmpp_message_attrs(From, To, RealFrom, RealTo, Type, Client_type, Client_ve
     Attrs3 = add_xmpp_spec_attrs(Attrs2,QchatID),  
     Attrs4 = add_xmpp_attrs(Attrs3,<<"realfrom">>,RealFrom),    
     Attrs5 = add_xmpp_attrs(Attrs4,<<"realto">>,RealTo), 
-
-    case Auto_reply of
-        'undefined' ->Attrs5;
-        _ -> [{<<"auto_reply">>,<<"true">>}] ++ Attrs5
-    end.
+    add_xmpp_attrs(Attrs5, <<"auto_reply">>, Auto_reply).
 
 make_xmpp_body(Msg_Type,Chat_id,Ex_Info,Backup_Info,Cdata) ->
-    ?DEBUG("msgType : ~p ~n",[Msg_Type]),
     Attrs = [{<<"msgType">>,get_msg_type(Msg_Type)}],
     Attrs1 = add_xmpp_attrs(Attrs,<<"id">>,Chat_id),    
     Attrs2 = add_xmpp_attrs(Attrs1,<<"extendInfo">>,Ex_Info),    
@@ -97,21 +92,17 @@ get_header_definedkey('binary',Key,Headers) ->
        [H] -> list_to_binary(H#stringheader.value)
     end;
 get_header_definedkey('unicode',Key,Headers) ->    
-    case lists:filter(fun(Str) ->    Str#stringheader.definedkey =:= Key end,Headers) of
+    case lists:filter(fun(Str) -> Str#stringheader.definedkey =:= Key end,Headers) of
        [] -> 'undefined';
        [H] -> unicode:characters_to_binary(H#stringheader.value)
     end.
 
-get_header_key(Key,Headers,DefValue) ->
-       case lists:filter(fun(Str) ->   Str#stringheader.key =:= Key end,Headers) of
+get_header_key(Key,Headers) ->
+    case lists:filter(fun(Str) -> Str#stringheader.key =:= Key end,Headers) of
     [Value] ->
-        case DefValue of
-        'null' -> list_to_binary(Value#stringheader.value);
-        _ -> DefValue
-        end;
+        list_to_binary(Value#stringheader.value);
     [] -> undefined
     end.
-    
 
 add_xmpp_attrs(Attrs,Key,Value) ->
     case Value of

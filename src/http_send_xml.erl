@@ -34,6 +34,6 @@ do_send_messages([{obj, Args}|Rest]) ->
     JFrom = jlib:string_to_jid(From),
     JTo = jlib:string_to_jid(To),
     Packet = fxml_stream:parse_element(Message),
-    catch monitor_util:monitor_count(<<"rpc_xml_message">>,1),
+    catch mod_static:add_record(<<"rpc_xml_message">>,1),
     ejabberd_sm:route_xml(JFrom,JTo,Packet),
     do_send_messages(Rest).

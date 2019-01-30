@@ -281,9 +281,9 @@ do_route(From, To, Packet) ->
        To#jid.lresource == <<"">> ->
 	   #xmlel{name = Name} = Packet,
 	   case Name of
-	     <<"iq">> -> monitor_util:monitor_count(<<"local_iq">>, 1), process_iq(From, To, Packet);
+	     <<"iq">> -> mod_static:add_record(<<"local_iq">>, 1), process_iq(From, To, Packet);
 	     <<"message">> ->
-                 monitor_util:monitor_count(<<"local_message">>, 1),
+                 mod_static:add_record(<<"local_message">>, 1),
 		 #xmlel{attrs = Attrs} = Packet,
 		 case fxml:get_attr_s(<<"type">>, Attrs) of
 		   <<"headline">> -> ok;
@@ -294,7 +294,7 @@ do_route(From, To, Packet) ->
 						   ?ERR_SERVICE_UNAVAILABLE),
 		       ejabberd_router:route(To, From, Err)
 		 end;
-	     <<"presence">> -> monitor_util:monitor_count(<<"local_presence">>, 1), ok;
+	     <<"presence">> -> mod_static:add_record(<<"local_presence">>, 1), ok;
 	     _ -> ok
 	   end;
        true ->

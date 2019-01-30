@@ -328,7 +328,7 @@ accept(ListenSocket, Module, Opts, Interval) ->
     NewInterval = check_rate_limit(Interval),
     case gen_tcp:accept(ListenSocket) of
 	{ok, Socket} ->
-            catch monitor_util:monitor_count(<<"accept_all_count">>, 1),
+            catch mod_static:add_record(<<"accept_all_count">>, 1),
 	    case {inet:sockname(Socket), inet:peername(Socket)} of
 		{{ok, {Addr, Port}}, {ok, {PAddr, PPort}}} ->
 		    ?INFO_MSG("(~w) Accepted connection ~s:~p -> ~s:~p",

@@ -1345,7 +1345,7 @@ session_established2(El, StateData) ->
 		 _ ->
 		     case Name of
 		       <<"presence">> ->
-            	           catch monitor_util:monitor_count(<<"receive_all_presence">>, 1),
+            	           catch mod_static:add_record(<<"receive_all_presence">>, 1),
                            PType = fxml:get_attr_s(<<"type">>, Attrs),
 			   PresenceEl0 = qtalk_c2s:make_new_PresenceEl(Server,User, NewEl, Attrs),
 			   PresenceEl =

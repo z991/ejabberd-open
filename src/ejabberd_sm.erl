@@ -143,7 +143,7 @@ route(From, To, Packet) ->
 -spec open_session(sid(), binary(), binary(), binary(), prio(), info()) -> ok.
 
 open_session(SID, User, Server, Resource, Priority, Info) ->
-    catch monitor_util:monitor_count(<<"user_login_Count">>, 1),
+    catch mod_static:add_record(<<"user_login_Count">>, 1),
     set_session(SID, User, Server, Resource, Priority, Info),
     check_for_sessions_to_replace(User, Server, Resource),
     JID = jid:make(User, Server, Resource),
@@ -921,7 +921,6 @@ judge_to_user_available(FServer,Rescource,R) ->
 
 %%TODO
 send_muc_room_remove_unavailable_user(From,To) ->
-   % case mnesia:dirty_read(muc_online_room, {From#jid.user, From#jid.server}) of
     case mod_muc_redis:get_muc_room_pid(From#jid.user, From#jid.server) of
         [] -> ok;
         [Muc] -> Muc#muc_online_room.pid ! {delete_unavailable_user,To}
@@ -948,9 +947,8 @@ try_insert_msg(From,To,Packet,Mbody,Now) ->
     insert_user_chat_msg(From,To,Packet,Attrs,Els,Mbody,LServer,Now).
 
 insert_user_chat_msg(From,To,Packet,Attrs,Els,Mbody,LServer,Now) ->
-    catch monitor_util:monitor_count(<<"chat_message">>,1),
+    catch mod_static:add_record(<<"chat_message">>,1),
     Carbon = fxml:get_attr_s(<<"carbon_message">>, Attrs),
-%    Now = qtalk_public:get_exact_timestamp(),
 
     case Carbon =/= <<"true">> andalso (not mod_muc_room:is_invitation(Els)) of
         true  ->

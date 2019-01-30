@@ -34,7 +34,7 @@ do_send_messages([{obj, Args}|Rest]) ->
     JFrom = jlib:string_to_jid(From),
     JTo = jlib:string_to_jid(To),
     Packet = fxml_stream:parse_element(Message),
-    catch monitor_util:monitor_count(<<"rpc_thirdparty_chat_message">>,1),
+    catch mod_static:add_record(<<"rpc_thirdparty_chat_message">>,1),
     catch qtalk_c2s:carbon_message(JFrom, JTo, Packet),
     ejabberd_router:route(JFrom,JTo,Packet),
     do_send_messages(Rest).

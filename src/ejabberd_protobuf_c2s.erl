@@ -1314,7 +1314,7 @@ session_established2(El, StateData) ->
 		 _ ->
 		     case Name of
 		       <<"presence">> ->
-            	           catch monitor_util:monitor_count(<<"receive_all_presence">>, 1),
+            	           catch mod_static:add_record(<<"receive_all_presence">>, 1),
                            PType = fxml:get_attr_s(<<"type">>, Attrs),
 			   PresenceEl0 =
                     qtalk_c2s:make_new_PresenceEl(Server,User, NewEl, Attrs),
@@ -1334,7 +1334,7 @@ session_established2(El, StateData) ->
 						NewStateData)
 			   end;
 		       <<"iq">> ->
-            	           catch monitor_util:monitor_count(<<"receive_all_iq">>, 1),
+            	           catch mod_static:add_record(<<"receive_all_iq">>, 1),
 			   case jlib:iq_query_info(NewEl) of
 			     #iq{xmlns = Xmlns} = IQ
 				 when Xmlns == (?NS_PRIVACY);
@@ -1354,7 +1354,7 @@ session_established2(El, StateData) ->
 						     FromJID, ToJID, NewEl0)
 			   end;
 		       <<"message">> ->
-            		catch monitor_util:monitor_count(<<"receive_all_message">>, 1),
+            		catch mod_static:add_record(<<"receive_all_message">>, 1),
                         Packet = qtalk_public:send_recv_repley(NewEl,FromJID,ejabberd_protobuf_c2s, NewStateData),
 			   NewEl0 = ejabberd_hooks:run_fold(
 				      user_send_packet, Server, NewEl,

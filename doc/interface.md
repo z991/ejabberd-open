@@ -177,3 +177,90 @@ maType说明参考[matype说明](matype.md)
     "data":""
 }
 ```
+
+## 7.获取个人信息
+
+```
+接口：/qtalk/get_user_nick
+请求方式：POST
+参数：
+{
+    "ID":"test",
+    "Domain":"qtalk.test.org"
+}
+
+返回值：
+{
+    "ret":true,
+    "errcode":0,
+    "errmsg":"",
+    "data":{
+        "Nick":"测试",
+        "Vcard":"file/v2/download/2048b3321d1798e94d6329d464b22baf.jpg?name=2048b3321d1798e94d6329d464b22baf.jpg&file=2048b3321d1798e94d6329d464b22baf.jpg&fileName=2048b3321d1798e94d6329d464b22baf.jpg"
+    }
+}
+```
+
+## 发送消息
+
+```
+接口：/qtalk/send_message
+请求方式：POST
+参数：
+{
+    "From":"test1", 
+    "To":[{"User":"test"}],
+    "Body":"xxxxxxx",
+    "Type":"chat",
+    "Msg_Type":"1",
+    "Host":"qtalk.test.org",
+    "Domain":"qtalk.test.org",
+    "Extend_Info":""
+}
+
+返回值：
+{
+    "ret":true,
+    "errcode":0,
+    "errmsg":"success"
+}
+```
+
+## 获取群成员
+
+```
+接口：/qtalk/muc_users
+请求方式：POST
+参数：
+{
+    "muc_id":"5f0b6bfa2e3a4d78aefe047ab06dc589", 
+    "muc_domain":"conference.qtalk.test.org"
+}
+
+返回值：
+{
+    "ret":true,
+    "errcode":0,
+    "errmsg":"",
+    "data":[
+        {"U":"test","H":"qtalk.test.org","N":"测试1"},
+        {"U":"test1","H":"qtalk.test.org","N":"测试2"}
+    ]
+}
+```
+
+## 验证uk
+
+```
+接口：/qtalk/auth_uk
+请求方式：GET
+参数：
+?u=test&k=290711548828672407278
+
+返回值：
+{
+    "ret":true,
+    "errcode":0,
+    "errmsg":"success"
+}
+```

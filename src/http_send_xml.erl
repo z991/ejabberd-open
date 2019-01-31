@@ -5,12 +5,10 @@
 -include("logger.hrl").
 
 handle(Req) ->
-    {Method, _} = cowboy_req:method(Req),
+    {Method, Req1} = cowboy_req:method(Req),
     case Method of 
-        <<"POST">> ->
-            send_message(Req);
-        _ ->
-            http_utils:cowboy_req_reply_json(http_utils:gen_fail_result(1, <<Method/binary, " is not disable">>), Req)
+        <<"POST">> -> send_message(Req1);
+        _ -> http_utils:cowboy_req_reply_json(http_utils:gen_fail_result(1, <<Method/binary, " is not disable">>), Req1)
     end.
 
 send_message(Req)->

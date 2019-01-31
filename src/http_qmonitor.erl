@@ -19,30 +19,25 @@ init(_Transport, Req, []) ->
 	{ok, Req, undefined}.
 
 handle(Req, State) ->
-	{Method, _} = cowboy_req:method(Req),
-	case Method of 
-	<<"GET">> ->
-	{ok, Req1} = get_echo(Method,Req),
-	{ok, Req1, State};
-	_ ->
-	{ok,Req1} = echo(undefined, Req),
-	{ok, Req1, State}
-	end.
-    	
+    {Method, Req1} = cowboy_req:method(Req),
+    case Method of 
+        <<"GET">> ->
+            {ok, Req2} = get_echo(Method,Req1),
+            {ok, Req2, State};
+        _ ->
+            {ok,Req2} = echo(undefined, Req1),
+            {ok, Req2, State}
+    end.
+
 get_echo(<<"GET">>,Req) ->
-	Res = get_monitor_info(),
-	cowboy_req:reply(200, [{<<"content-type">>, <<"text/plain; charset=utf-8">>}], Res, Req);
-get_echo(_,Req) ->
-	cowboy_req:reply(405, Req).
+    Res = get_monitor_info(),
+    cowboy_req:reply(200, [{<<"content-type">>, <<"text/plain; charset=utf-8">>}], Res, Req);
+get_echo(_,Req) -> cowboy_req:reply(405, Req).
 
-echo(undefined, Req) ->
-	cowboy_req:reply(400, [], <<"Missing parameter.">>, Req);
-echo(Echo, Req) ->
-	cowboy_req:reply(200, [{<<"content-type">>, <<"text/plain; charset=utf-8">>}], Echo, Req).
+echo(undefined, Req) -> cowboy_req:reply(400, [], <<"Missing parameter.">>, Req);
+echo(Echo, Req) -> cowboy_req:reply(200, [{<<"content-type">>, <<"text/plain; charset=utf-8">>}], Echo, Req).
 
-terminate(_Reason, _Req, _State) ->
-	ok.
-
+terminate(_Reason, _Req, _State) -> ok.
 
 get_monitor_info() ->
     ServiceStat = mod_static:get_static1(),
@@ -51,20 +46,17 @@ get_monitor_info() ->
     MemoryStat = memory_stat(),
     ClientStat = client_platform_stat(),
     Result = gen_result(lists:flatten([MemoryStat, MsgQueueStat, PortStat, ServiceStat, ClientStat])),
-
-    ?ERROR_MSG("the qmonitor result is: ~p~n", [Result]),
     Result.
 
 client_platform_stat() ->
     N = length(nodes()) + 1,
     case catch ets:lookup(local_config,{global,db_hosts}) of
-	[DHost] when is_record(DHost,local_config) ->
-		V = DHost#local_config.value,
-		lists:map(fun(H) ->
-			{<<"user_login_value_", H/binary>>, integer_to_list(ejabberd_sm:get_vh_session_number(H) div N)}
-		end, V);
-	_ ->
-		[]
+        [DHost] when is_record(DHost,local_config) ->
+            V = DHost#local_config.value,
+            lists:map(fun(H) ->
+                {<<"user_login_value_", H/binary>>, integer_to_list(ejabberd_sm:get_vh_session_number(H) div N)}
+            end, V);
+	_ -> []
     end.
 
 port_stat() ->

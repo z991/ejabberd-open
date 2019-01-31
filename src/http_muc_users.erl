@@ -5,12 +5,10 @@
 -include("logger.hrl").
 
 handle(Req) ->
-    {Method, _} = cowboy_req:method(Req),
+    {Method, Req1} = cowboy_req:method(Req),
     case Method of 
-        <<"POST">> ->
-            do_handle(Req);
-        _ ->
-            http_utils:cowboy_req_reply_json(http_utils:gen_fail_result(1, <<Method/binary, " is not disable">>), Req)
+        <<"POST">> -> do_handle(Req1);
+        _ -> http_utils:cowboy_req_reply_json(http_utils:gen_fail_result(1, <<Method/binary, " is not disable">>), Req1)
     end.
 
 do_handle(Req)->
@@ -30,7 +28,7 @@ get_muc_users(Args) ->
 
 create_muc(Server,Args) ->
     MucId = http_muc_session:get_value("muc_id",Args,<<"">>),
-    Domain = http_muc_session:get_value("muc_domain",Args,<<"">>),
+    _Domain = http_muc_session:get_value("muc_domain",Args,<<"">>),
 
     Infos = case catch ejabberd_sql:sql_query(Server, [<<"SELECT q.username, q.host, case when b.user_name is null then q.username else b.user_name end FROM muc_room_users q LEFT JOIN host_info a ON q.host = a.host LEFT JOIN host_users b ON q.username = b.user_id WHERE muc_name = '">>,MucId,<<"'">>]) of
         {selected,_,Res} when is_list(Res)  ->

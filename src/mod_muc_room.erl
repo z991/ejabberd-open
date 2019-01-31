@@ -460,10 +460,6 @@ normal_state({route, From, <<"">>,
                    process_iq_create_muc(From,Type,Lang,SubEl,StateData);
                    ?NS_MUC_DEL_REGISTER ->
                    process_iq_del_muc_user(From,Type,Lang,SubEl,StateData);
-                   ?NS_MUC_USER_SUBSCRIBE ->
-                   process_iq_muc_user_sub(From,Type,Lang,SubEl,StateData);
-                   ?NS_MUC_USER_SUBSCRIBE_V2 ->
-                   process_iq_muc_user_sub_v2(From,Type,Lang,SubEl,StateData);
                    ?NS_MUC_AUTHORITY ->
                    process_iq_authority(From,Type,Lang,SubEl,StateData);
                    ?NS_MUC_ONLINE_REGISTER ->
@@ -1049,8 +1045,6 @@ terminate(Reason, _StateName, StateData) ->
 			 tab_remove_online_user(LJID, StateData)
 		 end,
 		 [], get_users_and_subscribers(StateData)),
-%    add_to_log(room_existence, stopped, StateData),
-    catch ets:delete(muc_subscribe_users,{StateData#state.room,StateData#state.host}),
     catch ets:delete(muc_users,{StateData#state.room,StateData#state.host}),
     mod_muc:room_destroyed(StateData#state.host, StateData#state.room, self(),
 			   StateData#state.server_host),
@@ -3353,7 +3347,6 @@ send_kickban_presence(UJID, JID, Reason, Code, NewAffiliation,
 		  end
 	    end,
     catch qtalk_muc:del_muc_room_users(StateData#state.server_host,StateData#state.room,StateData#state.host,JID#jid.user,JID#jid.lserver),
-    catch qtalk_muc:update_subscribe_users(false,StateData#state.server_host,JID#jid.luser,JID#jid.lserver,StateData#state.room,StateData#state.host,<<"0">>),
     catch send_muc_del_registed_presence(JID,StateData),
     lists:foreach(fun (J) ->
 			  tab_remove_online_user(J, StateData),
@@ -5316,8 +5309,7 @@ process_iq_create_muc(From,set,_Lang,_SubEl,StateData) ->
     Nick = qtalk_public:get_nick(From#jid.luser,From#jid.lserver),
     Packet = qtalk_public:make_default_presence_packet(ItemAttrs),
 
-    catch mod_muc:store_room(StateData#state.server_host,StateData#state.host,
-               StateData#state.room, make_opts(StateData)),
+    %%catch mod_muc:store_room(StateData#state.server_host,StateData#state.host, StateData#state.room, make_opts(StateData)),
 
     case add_new_user(From, Nick,Packet,StateData) of
     StateData ->
@@ -5807,95 +5799,8 @@ make_muc_user_attrs(User,Host,StateData) ->
 process_iq_del_muc_user(_From,get,_Lang,_SubEl,_StateData) ->
     {error,?ERR_FORBIDDEN};
 process_iq_del_muc_user(From,set,_Lang,_SubEl,StateData) ->
-%    catch qtalk_muc:del_subscribe_users(StateData#state.server_host,StateData#state.room,From#jid.user),
- %   catch qtalk_muc:del_muc_room_users(StateData#state.server_host,StateData#state.room,From#jid.user,From#jid.lserver),
     NewStateData = kick_user_all_jid(From#jid.luser,From#jid.lserver,<<"">>,StateData),
     {result,[],NewStateData}.
-
-%%%%%%%%--------------------------------------------------------------------
-%%%%%%%% @date 2017-03-01
-%%%%%%%% 处理用户ＩＱ群订阅操作
-%%%%%%%%--------------------------------------------------------------------
-process_iq_muc_user_sub(From,get,_Lang,_SubEl,StateData) ->
-    Subscribe_flag =
-        case ets:lookup(muc_subscribe_users,{StateData#state.room,StateData#state.host}) of
-        [] ->
-            <<"false">>;
-        [UL] ->
-            case lists:member({{From#jid.user,From#jid.server}, <<"1">>},UL#subscribe_users.users) of
-            true ->
-                <<"true">>;
-            _ ->
-                <<"false">>
-            end
-        end,
-    {result,[#xmlel{name = <<"subscribe">> , attrs = [{<<"status">>,Subscribe_flag}],  children = []}],StateData};
-process_iq_muc_user_sub(From,set,_Lang,SubEl,StateData) ->
-    case fxml:get_subtag(SubEl, <<"subscribe">>) of
-    false ->
-        {error,?ERR_FORBIDDEN};
-    El ->
-        case fxml:get_tag_attr_s(<<"action">>,El) of
-        <<"add">> ->
-            case catch qtalk_muc:update_subscribe_users(false,StateData#state.server_host,From#jid.user,From#jid.lserver,
-				StateData#state.room, StateData#state.host, <<"1">>) of
-            true ->
-                {result,[#xmlel{name = <<"add_subscribe">> , attrs = [{<<"status">>,<<"true">>}],  children = []}],StateData};
-            _ ->
-                {result,[#xmlel{name = <<"add_subscribe">> , attrs = [{<<"status">>,<<"false">>}], children = []}],StateData}
-            end;
-        <<"delete">> ->
-            case catch qtalk_muc:update_subscribe_users(false,StateData#state.server_host,From#jid.user,From#jid.lserver,
-				StateData#state.room, StateData#state.host,<<"0">>) of
-            true ->
-                {result,[#xmlel{name = <<"delete_subscribe">> , attrs = [{<<"status">>,<<"true">>}],  children = []}],StateData};
-            _ ->
-                {result,[#xmlel{name = <<"delete_subscribe">> , attrs = [{<<"status">>,<<"false">>}], children = []}],StateData}
-            end;
-        _ ->
-            {error,?ERR_FORBIDDEN}
-        end
-    end.
-
-%%%%%%%%--------------------------------------------------------------------
-%%%%%%%% @date 2017-03-01
-%%%%%%%% 处理用户ＩＱ群订阅操作
-%%%%%%%%--------------------------------------------------------------------
-process_iq_muc_user_sub_v2(From,get,_Lang,_SubEl,StateData) ->
-    Subscribe_flag =
-        case ets:lookup(muc_subscribe_users,{StateData#state.room,StateData#state.host}) of
-        [] ->
-            <<"-1">>;
-        [UL] ->
-            case lists:keyfind({From#jid.user,From#jid.lserver}, 1, UL#subscribe_users.users) of
-            {_, Status} ->
-                Status;
-            _ ->
-                <<"-1">>
-            end
-        end,
-    {result,[#xmlel{name = <<"subscribe">> , attrs = [{<<"status">>,Subscribe_flag}],  children = []}],StateData};
-process_iq_muc_user_sub_v2(From,set,_Lang,SubEl,StateData) ->
-    case fxml:get_subtag(SubEl, <<"subscribe">>) of
-    false ->
-        {error,?ERR_FORBIDDEN};
-    El ->
-        Status = fxml:get_tag_attr_s(<<"action">>,El),
-        case catch qtalk_muc:update_subscribe_users(false,StateData#state.server_host,From#jid.user,From#jid.lserver,
-				StateData#state.room,StateData#state.host, Status) of
-            true ->
-
-		Packet = #xmlel{name = <<"presence">>,
-				attrs = [{<<"xmlns">>,<<"http://jabber.org/protocol/muc#muc_user_subscribe_v2">>}],
-				children = [#xmlel{name = <<"subscribe_updte">>,
-						attrs = [{<<"status">>, Status}],
-						children =  []}]},
-		ejabberd_router:route(StateData#state.jid, jid:replace_resource(From, <<"">>), Packet), 
-                {result,[#xmlel{name = <<"add_subscribe">> , attrs = [{<<"status">>,<<"true">>}],  children = []}],StateData};
-            _ ->
-                {result,[#xmlel{name = <<"add_subscribe">> , attrs = [{<<"status">>,<<"false">>}], children = []}],StateData}
-        end
-    end.
 
 %%%%%%%%--------------------------------------------------------------------
 %%%%%%%% @date 2017-03-01
@@ -6064,7 +5969,6 @@ check_Attrs_JID(User,Domain,Attrs,StateData) ->
             {error, ?ERR_NOT_ALLOWED};
         JID ->
             catch qtalk_muc:del_muc_room_users(StateData#state.server_host,StateData#state.room,StateData#state.host,User,Domain),
-            catch qtalk_muc:update_subscribe_users(false,StateData#state.server_host,User,Domain,StateData#state.room,StateData#state.host, <<"0">>),
             catch send_muc_del_registed_presence(JID,StateData),
             {value, [JID]}
         end;

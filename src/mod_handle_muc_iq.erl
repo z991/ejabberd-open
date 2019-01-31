@@ -20,46 +20,35 @@ handle_iq(Server,Room,Host,<<"">>,From,To,Packet) ->
      case XMLNS of
         ?NS_MUC_ADMIN ->
             case Type of
-            set ->
-                mod_muc:recreate_muc_room(Server,Host,Room,From,<<"">>,Packet,true);
-            _ ->
-                send_error_packet(From,To,Packet)
+            set -> mod_muc:recreate_muc_room(Server,Host,Room,From,<<"">>,Packet,true);
+            _ -> send_error_packet(From,To,Packet)
             end;
         ?NS_MUC_OWNER ->
             case Type of
-            set ->
-                mod_muc:recreate_muc_room(Server,Host,Room,From,<<"">>,Packet,true);
-            _ ->
-                send_error_packet(From,To,Packet)
+            set -> mod_muc:recreate_muc_room(Server,Host,Room,From,<<"">>,Packet,true);
+            _ -> send_error_packet(From,To,Packet)
             end;
         ?NS_CREATE_MUC ->
             case Type of
-            set ->
-                                mod_muc:handle_recreate_muc(Server,Room,Host,From,<<"">>,Packet);
-            _ ->
-                send_error_packet(From,To,Packet)
+            set -> mod_muc:handle_recreate_muc(Server,Room,Host,From,<<"">>,Packet, true);
+            _ -> send_error_packet(From,To,Packet)
             end;
         ?NS_MUC_REGISTER ->
             case Type of
             get ->
                 Res = process_iq_muc_register(From,Server,Room, Host),
                 hanlde_IQ_Res(Res,IQ,SubElName,SubEl,XMLNS,To,From);
-            set ->
-                send_error_packet(From,To,Packet)
+            set -> send_error_packet(From,To,Packet)
             end;
         ?NS_MUC_INVITE ->
             case Type of
-            set ->
-                mod_muc:recreate_muc_room(Server,Host,Room,From,<<"">>,Packet,true);
-            _ ->
-                send_error_packet(From,To,Packet)
+            set -> mod_muc:recreate_muc_room(Server,Host,Room,From,<<"">>,Packet,true);
+            _ -> send_error_packet(From,To,Packet)
             end;
         ?NS_MUC_INVITE_V2 ->
             case Type of
-            set ->
-                mod_muc:recreate_muc_room(Server,Host,Room,From,<<"">>,Packet,true);
-            _ ->
-                send_error_packet(From,To,Packet)
+            set -> mod_muc:recreate_muc_room(Server,Host,Room,From,<<"">>,Packet,true);
+            _ -> send_error_packet(From,To,Packet)
             end;
         ?NS_MUC_USER_SUBSCRIBE ->
             mod_muc:recreate_muc_room(Server,Host,Room,From,<<"">>,Packet,true);
@@ -67,10 +56,8 @@ handle_iq(Server,Room,Host,<<"">>,From,To,Packet) ->
             mod_muc:recreate_muc_room(Server,Host,Room,From,<<"">>,Packet,true);
         ?NS_MUC_DEL_REGISTER ->
             case Type of
-            set ->
-                mod_muc:recreate_muc_room(Server,Host,Room,From,<<"">>,Packet,true);
-            _ ->
-                ok
+            set -> mod_muc:recreate_muc_room(Server,Host,Room,From,<<"">>,Packet,true);
+            _ -> ok
             end
         end;
     _ ->
@@ -121,7 +108,7 @@ make_muc_user_attrs(User,Host,UL) ->
 get_muc_room_users(Server,From,Room, Host) ->
     case ets:lookup(muc_users,{Room,Host}) of
     [] ->
-        qtalk_muc:init_ets_muc_user(Server,Room, Host),
+        qtalk_muc:init_ets_muc_users(Server,Room, Host),
         case ets:lookup(muc_users,{Room,Host}) of
         [] ->
             [];

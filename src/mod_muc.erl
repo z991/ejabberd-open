@@ -148,6 +148,13 @@ create_room(Host, Name, From, Nick, Opts) ->
 store_room(ServerHost, Host, Name, Opts) ->
     LServer = jid:nameprep(ServerHost),
     Mod = gen_mod:db_mod(LServer, ?MODULE),
+    try
+        throw (asdf)
+    catch
+        R ->
+            ?ERROR_MSG("=============~p~n", [erlang:get_stacktrace()]),
+            ?ERROR_MSG("=============~p~n", [R])
+    end,
     Mod:store_room(LServer, Host, Name, Opts).
 
 restore_room(ServerHost, Host, Name) ->
@@ -191,7 +198,6 @@ init([Host, Opts]) ->
     mnesia:add_table_copy(muc_online_room, node(), ram_copies),
     catch ets:new(muc_online_users, [bag, named_table, public, {keypos, 2}]),
     catch ets:new(muc_users,[set,named_table,public,{keypos,1},{write_concurrency, true}, {read_concurrency, true}]),
-    catch ets:new(muc_subscribe_users,[set,named_table,public,{keypos,2},{write_concurrency, true}, {read_concurrency, true}]),
     catch ets:new(muc_opts,[set,named_table,public,{keypos,1},{write_concurrency, true}, {read_concurrency, true}]),
     %%clean_table_from_bad_node(node(), MyHost),
 
@@ -512,21 +518,7 @@ do_route1(Host, ServerHost, Access, HistorySize, RoomShaper,
 				  ejabberd_router:route(To, From, Err)
 			    end
 		      end;
-		  <<"presence">> -> 
-           case fxml:get_subtag(Packet, <<"x">>) of
-           false ->
-                ok;
-           Xtag ->
-                case catch fxml:get_tag_attr_s(<<"xmlns">>, Xtag) of
-                  ?NS_PRESENCE_ALL ->
-                  make_muc_cheat_presence(From,To);
-                  ?NS_PRESENCE_ALL_V2 ->
-                    make_muc_cheat_presence(From,To);
-                   Err ->
-                    ?DEBUG("Err ~p ~n",[Err]),
-                    ok
-                end
-            end
+		  <<"presence">> -> ok
 		end;
 	    _ ->
 		case fxml:get_attr_s(<<"type">>, Attrs) of
@@ -564,11 +556,11 @@ do_route1(Host, ServerHost, Access, HistorySize, RoomShaper,
 				    ejabberd_router:route(To, From, Err)
 			    end;
 		        {<<"message">>,<<"groupchat">>} ->
-                		recreate_muc_room(ServerHost,Host,Room,From,Nick,Packet);
+                		recreate_muc_room(ServerHost,Host,Room,From,Nick,Packet, true);
 		        {<<"message">>,<<"chat">>} ->
-        		        recreate_muc_room(ServerHost,Host,Room,From,Nick,Packet);
+        		        recreate_muc_room(ServerHost,Host,Room,From,Nick,Packet, true);
 		        {<<"message">>,<<"normal">>} ->
-		                recreate_muc_room(ServerHost,Host,Room,From,Nick,Packet);
+		                recreate_muc_room(ServerHost,Host,Room,From,Nick,Packet, true);
         		{<<"iq">>,_} ->
 	                	catch mod_handle_muc_iq:handle_iq(ServerHost,Room,Host,Nick,From,To,Packet);
 			_ ->
@@ -1015,28 +1007,8 @@ iq_get_user_mucs(_ServerHost, _Host, From, _Lang) ->
             attrs = [{<<"name">>,Muc_Name},{<<"host">>,H}],
             children = []} end,Mucs).
 
-
-make_muc_cheat_presence(From,To) ->
-    Nick =  qtalk_public:get_nick(From#jid.user ,From#jid.lserver),
-    JID = jlib:jid_to_string(jlib:jid_remove_resource(From)),
-    case catch qtalk_sql:get_user_register_mucs(From#jid.lserver,From#jid.luser,From#jid.lserver) of
-    {selected,_,SRes} when is_list(SRes) ->
-         send_user_room_packet(From,To,SRes),
-         lists:foreach(fun([N,D]) ->
-            case jlib:make_jid(N,D,Nick) of
-            error ->
-                ok;
-            NewTo ->
-                  Packet = make_cheat_presence_packet(JID,From#jid.luser,From#jid.lserver,N),
-                  ejabberd_router:route(NewTo,From, Packet)
-            end end,SRes);
-    Err ->
-        ?DEBUG("Err ~p ~n",[Err]),
-        ok
-    end.
-
 recreate_muc_room(ServerHost,Host,Room,From,Nick,Packet) ->
-    do_recreate_muc_room(ServerHost,Host,Room,From,Nick,Packet,false).
+    do_recreate_muc_room(ServerHost,Host,Room,From,Nick,Packet,true).
 
 recreate_muc_room(ServerHost,Host,Room,From,Nick,Packet,Flag) ->
     do_recreate_muc_room(ServerHost,Host,Room,From,Nick,Packet,Flag).
@@ -1062,87 +1034,32 @@ do_recreate_muc_room(ServerHost,Host,Room,From,Nick,Packet,Flag) ->
         end
     end.
 
-send_user_room_packet(From, _To, Rooms) ->
-    NewRooms =
-        lists:foldl(fun([R,_H],Acc) ->
-            case Acc of
-            [] ->
-                [R];
-            _ ->
-                [R] ++ [<<",">>] ++ Acc
-            end end,[],Rooms),
-    NewRooms1 =
-        lists:foldl(fun([R,H],Acc) ->
-            case Acc of
-            [] ->
-                [str:concat(R,str:concat(<<"@">>,H))];
-            _ ->
-                [str:concat(R,str:concat(<<"@">>,H))] ++ [<<",">>] ++ Acc
-            end end,[],Rooms),
-    Packet =
-         #xmlel{name = <<"presence">>,
-                 attrs = [{<<"xmlns">>,?NS_USER_MUCS},{<<"mucs">>,list_to_binary(NewRooms)},{<<"muc_domains">>,list_to_binary(NewRooms1)}],
-         children = []},
-    case jlib:make_jid(<<"muc_admin">>,From#jid.lserver,<<"">>) of
-    error ->
-        ok;
-    NewTo ->
-        ejabberd_router:route(NewTo,From, Packet)
-    end.
-
-
-make_cheat_presence_packet(JID,User,Server,Muc) ->
-    #xmlel{name = <<"presence">>,
-            attrs = [{<<"priority">>,<<"5">>},{<<"version">>,<<"2">>}],
-                children = [
-                #xmlel{name = <<"x">>,
-                     attrs =[{<<"xmlns">>,
-                        ?NS_MUC_USER}],
-                     children = [
-                            #xmlel{name = <<"item">>,attrs = [{<<"affiliation">>,get_user_muc_affiliation(JID,Muc)},
-                                    {<<"real_jid">>,User},
-                                    {<<"domain">>,Server},
-                                    {<<"role">>,<<"participant">>}],children =  []},
-                            #xmlel{name = <<"status">>,attrs = [{<<"code">>, <<"110">>}],children = []}]}]}.
-
 handle_recreate_muc(Server, Muc, Host, From, Nick, Packet) ->
     handle_recreate_muc(Server, Muc, Host, From, Nick, Packet, true).
 
-handle_recreate_muc(Server, Muc, Host, From, Nick, Packet, _Flag) ->
-    case catch ets:lookup(muc_opts, Host) of
+handle_recreate_muc(Server, Muc, Host, From, Nick, Packet, Flag) ->
+    P = case catch ets:lookup(muc_opts, Host) of
     [{ _,#state{host = Host, access = Access, default_room_opts = DefRoomOpts,
         history_size = HistorySize,
         room_shaper = RoomShaper}}] ->
         {ok, Pid} =  start_new_room(Host, Server, Access, Muc, HistorySize,  RoomShaper, From,  Nick, DefRoomOpts),
         register_room(Host, Muc, Pid),
-        ?INFO_MSG("Recreate Muc ~p ~n",[Muc]),
-        mod_muc_room:route(Pid, From, Nick, Packet);
+        Pid;
     _ ->
         case catch qtalk_sql:get_muc_opts(Server,Muc, Host) of
         {selected,_,[[Opts]]} ->
             Bopts = opts_to_binary(ejabberd_sql:decode_term(Opts)),
             {ok, Pid} = mod_muc_room:start(Host,Server,{all,all,none,all},Muc,20,none,Bopts),
             register_room(Host, Muc, Pid),
-            ?INFO_MSG("Recreate Muc default ~p ~n",[Muc]),
-            mod_muc_room:route(Pid, From, Nick, Packet);
-        _ ->
-            ok
+            Pid;
+        _ -> false 
         end
-    end.
+    end,
 
-get_user_muc_affiliation(User,Muc) ->
-    case catch ets:lookup(muc_affiliation,Muc) of
-    [{_,L}] when is_list(L) andalso L =/= [] ->
-        Aff = proplists:get_value(User,L,none),
-        if  Aff =:= admin ->
-            <<"admin">>;
-            Aff =:= owner ->
-            <<"owner">>;
-            true ->
-            <<"none">>
-        end;
-    _ ->
-        <<"none">>
+    case {P, Flag} of
+        {false, _} -> ok;
+        {_, false} -> ok;
+        {_, true} -> mod_muc_room:route(P, From, Nick, Packet)
     end.
 
 check_muc_owner(LServer,Muc,User) ->

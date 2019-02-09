@@ -1,7 +1,17 @@
+## 注意事项
+以下文档请务必仔细阅读和参照执行，否则可能会创建失败
+
+强调几点：
+* 切勿使用root账号进行如下操作，很多软件会检查当前用户名称，so请新建用户来进行操作;
+* redis 启动需要加载配置
+* 对startalk来说，配置中的domain 非常重要，请务必仔细配置，保持一致。
+
 # Startalk EJABBERD
 
 Startalk(前身叫Qtalk，目前主体app尚未全部改名完毕。)是基于ejabberd，根据业务需要改造而来。修改和扩展了很多
 ejaberd不支持的功能。
+
+
 
 ## 关键功能
 
@@ -147,7 +157,7 @@ $ git clone https://github.com/qunarcorp/or_open.git
 $ git clone https://github.com/qunarcorp/qtalk_cowboy_open.git
 
 
-openresry安装
+openresty安装
 $ cd /home/startalk/download
 $ wget https://openresty.org/download/openresty-1.13.6.2.tar.gz
 $ tar -zxvf openresty-1.13.6.2.tar.gz

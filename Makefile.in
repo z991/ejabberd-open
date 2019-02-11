@@ -175,8 +175,8 @@ install: all copy-files
 	# Configuration files
 	$(INSTALL) -d -m 750 $(G_USER) $(ETCDIR)
 	[ -f $(ETCDIR)/ejabberd.yml ] \
-		&& $(INSTALL) -b -m 640 $(G_USER) ejabberd.yml.example $(ETCDIR)/ejabberd.yml-new \
-		|| $(INSTALL) -b -m 640 $(G_USER) ejabberd.yml.example $(ETCDIR)/ejabberd.yml
+		&& $(INSTALL) -b -m 640 $(G_USER) ejabberd.yml.qunar $(ETCDIR)/ejabberd.yml-new \
+		|| $(INSTALL) -b -m 640 $(G_USER) ejabberd.yml.qunar $(ETCDIR)/ejabberd.yml
 	$(SED) -e "s*{{rootdir}}*@prefix@*" \
 		-e "s*{{installuser}}*@INSTALLUSER@*" \
 		-e "s*{{bindir}}*@bindir@*" \
@@ -188,8 +188,9 @@ install: all copy-files
 		-e "s*{{epmd}}*@EPMD@*" ejabberdctl.template \
 		> ejabberdctl.example
 	[ -f $(ETCDIR)/ejabberdctl.cfg ] \
-		&& $(INSTALL) -b -m 640 $(G_USER) ejabberdctl.cfg.example $(ETCDIR)/ejabberdctl.cfg-new \
-		|| $(INSTALL) -b -m 640 $(G_USER) ejabberdctl.cfg.example $(ETCDIR)/ejabberdctl.cfg
+		&& $(INSTALL) -b -m 640 $(G_USER) ejabberdctl.cfg.qunar $(ETCDIR)/ejabberdctl.cfg-new \
+		|| $(INSTALL) -b -m 640 $(G_USER) ejabberdctl.cfg.qunar $(ETCDIR)/ejabberdctl.cfg
+	$(INSTALL) -b -m 640 $(G_USER) server.pem $(ETCDIR)/server.pem
 	$(INSTALL) -b -m 644 $(G_USER) inetrc $(ETCDIR)/inetrc
 	#
 	# Administration script

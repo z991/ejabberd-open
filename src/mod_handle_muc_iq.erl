@@ -10,7 +10,6 @@ handle_iq(Server,Room,Host,<<"">>,From,To,Packet) ->
         sub_el = #xmlel{name = SubElName} = SubEl} = IQ
     when    (XMLNS == (?NS_MUC_ADMIN)) or
             (XMLNS == (?NS_MUC_REGISTER)) or
-            (XMLNS == (?NS_MUC_INVITE)) or
             (XMLNS == (?NS_MUC_INVITE_V2)) or
             (XMLNS == (?NS_MUC_OWNER)) or
             (XMLNS == (?NS_CREATE_MUC)) or
@@ -39,11 +38,6 @@ handle_iq(Server,Room,Host,<<"">>,From,To,Packet) ->
                 Res = process_iq_muc_register(From,Server,Room, Host),
                 hanlde_IQ_Res(Res,IQ,SubElName,SubEl,XMLNS,To,From);
             set -> send_error_packet(From,To,Packet)
-            end;
-        ?NS_MUC_INVITE ->
-            case Type of
-            set -> mod_muc:recreate_muc_room(Server,Host,Room,From,<<"">>,Packet,true);
-            _ -> send_error_packet(From,To,Packet)
             end;
         ?NS_MUC_INVITE_V2 ->
             case Type of

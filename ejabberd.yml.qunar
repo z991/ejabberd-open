@@ -114,7 +114,8 @@ listen:
   - 
     port: 5222
     module: ejabberd_c2s
-    #certfile: "/path/server.pem"
+    certfile: "/startalk/ejabberd/etc/ejabberd/server.pem"
+    starttls: true
     #starttls: true
     ##
     ## If TLS is compiled in and you installed a SSL
@@ -139,8 +140,8 @@ listen:
     access: c2s
   -
     port: 5202
-    #certfile: "/path/server.pem"
-    #starttls: true
+    certfile: "/startalk/ejabberd/etc/ejabberd/server.pem"
+    starttls: true
     zlib: false
     module: ejabberd_protobuf_c2s
     max_stanza_size: 365536

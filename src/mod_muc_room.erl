@@ -152,9 +152,9 @@ normal_state({route, From, <<"">>,
 	of
       true ->
 	  case fxml:get_attr_s(<<"type">>, Attrs) of
-        <<"revoke">> ->
-            handle_muc_revoke_msg(From,Packet,StateData),
-            {next_state, normal_state, StateData};
+            <<"revoke">> ->
+                handle_muc_revoke_msg(From,Packet,StateData),
+                {next_state, normal_state, StateData};
 	    <<"groupchat">> ->
 		Activity = get_user_activity(From, StateData),
 		Now = p1_time_compat:system_time(micro_seconds),
@@ -421,7 +421,6 @@ normal_state({route, From, <<"">>,
 		       or (XMLNS == (?NS_CAPTCHA))
                or (XMLNS == (?NS_MUC_REGISTER))
                or (XMLNS == (?NS_MUC_SET_REGISTER))
-               or (XMLNS == (?NS_MUC_INVITE))
                or (XMLNS == (?NS_MUC_INVITE_V2))
                or (XMLNS == (?NS_MUC_AUTHORITY))
                or (XMLNS == (?NS_CREATE_MUC))
@@ -448,8 +447,6 @@ normal_state({route, From, <<"">>,
 				   process_iq_vcard(From, Type, Lang, SubEl, StateData);
 			       ?NS_MUCSUB ->
 				   process_iq_mucsub(From, Packet, IQ, StateData);
-                   ?NS_MUC_INVITE ->
-                   process_iq_invtie(From,Type,Lang,SubEl,StateData);
                    ?NS_MUC_INVITE_V2 ->
                    process_iq_invtie_v2(From,Type,Lang,SubEl,StateData);
                    ?NS_MUC_REGISTER ->
@@ -5071,8 +5068,7 @@ check_decline_invitation(Packet) ->
 %% The original stanza must be slightly modified.
 send_decline_invitation({Packet, XEl, DEl, ToJID},
 			RoomJID, FromJID) ->
-    FromString =
-	jid:to_string(jid:remove_resource(FromJID)),
+    FromString = jid:to_string(jid:remove_resource(FromJID)),
     #xmlel{name = <<"decline">>, attrs = DAttrs,
 	   children = DEls} =
 	DEl,
@@ -5140,8 +5136,7 @@ store_room(StateData) ->
 	    mod_muc:store_room(StateData#state.server_host,
 			       StateData#state.host, StateData#state.room,
 			       make_opts(StateData));
-       true ->
-	    ok
+       true -> ok
     end.
 
 send_wrapped(From, To, Packet, Node, State) ->
@@ -5151,33 +5146,20 @@ send_wrapped(From, To, Packet, Node, State) ->
 		    {ok, #user{last_presence = undefined}} -> true;
 		    error -> true;
 		    _ -> false
-		end,
+    end,
     if IsOffline ->
-	    case ?DICT:find(LBareTo, State#state.subscribers) of
-		{ok, #subscriber{nodes = Nodes, jid = JID}} ->
-		    case lists:member(Node, Nodes) of
-			true ->
-			    NewPacket = wrap(From, JID, Packet, Node),
-			    ejabberd_router:route(State#state.jid, JID, NewPacket);
-			false ->
-			    ok
-		    end;
-		_ ->
-		    ok
-	    end;
-       true ->
-	    ejabberd_router:route(From, To, Packet)
+        case ?DICT:find(LBareTo, State#state.subscribers) of
+            {ok, #subscriber{nodes = Nodes, jid = JID}} ->
+                case lists:member(Node, Nodes) of
+                    true ->
+                        NewPacket = wrap(From, JID, Packet, Node),
+                        ejabberd_router:route(State#state.jid, JID, NewPacket);
+                    false -> ok
+                end;
+            _ -> ok
+        end;
+        true -> ejabberd_router:route(From, To, Packet)
     end.
-
-%send_wrapped1(From, To, Packet, Node, _State) ->
-%    LTo = jid:tolower(To),
-%    LBareTo = jid:tolower(jid:remove_resource(To)),
-%    IsOffline = true,
-%    ?DEBUG("From ~p ,To ~p ,Packet ~p,IsOffline ~p ~n",[From,LTo,Packet,IsOffline]),
-%    NewPacket = wrap(From, To, Packet, Node),
-%    ejabberd_router:route(From, To, NewPacket).
-
-
 
 wrap(From, To, Packet, Node) ->
     Pkt1 = jlib:replace_from_to(From, To, Packet),
@@ -5195,14 +5177,13 @@ wrap(From, To, Packet, Node) ->
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Multicast
-
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 send_wrapped_multiple(From, _Users, Packet, _Node, State) ->
-	{FromNick, _Role} = get_participant_data(From, State),
-	send_muc_message(State,From,FromNick,Packet).
+    {FromNick, _Role} = get_participant_data(From, State),
+    send_muc_message(State,From,FromNick,Packet).
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Detect messange stanzas that don't have meaninful content
-
 has_body_or_subject(Packet) ->
     [] /= lists:dropwhile(fun
 	(#xmlel{name = <<"body">>}) -> false;
@@ -5215,59 +5196,47 @@ has_body_or_subject(Packet) ->
 %%%%%%%% @date 2017-03-01
 %%%%%%%% 邀请所有已注册的群成员
 %%%%%%%%--------------------------------------------------------------------
-
 invite_all_register_user(State)->   
-    Packet =
-        #xmlel{name = <<"presence">>,
-            attrs = [{<<"priority">>,<<"5">>},{<<"version">>,<<"2">>}],
-                children = [
-                    #xmlel{name = <<"x">>,
-                     attrs =[{<<"xmlns">>,
-                        ?NS_MUC}],
-                     children = []}
-                    ]},
+    Packet = #xmlel{name = <<"presence">>,
+                    attrs = [{<<"priority">>,<<"5">>},{<<"version">>,<<"2">>}],
+                    children = [#xmlel{name = <<"x">>,
+                                       attrs =[{<<"xmlns">>, ?NS_MUC}],
+                                       children = []}]},
+
     case catch ets:lookup(muc_room_users,State#state.room) of
-    [{_,UL}] when is_list(UL) ->
-        do_invite_all_register_user(UL,Packet,State);
-    _ ->
-        case catch qtalk_sql:get_muc_users(State#state.server_host,State#state.room,State#state.host) of
-        {selected,_,Res} when is_list(Res) ->
-            UL = lists:flatmap(fun([U,H]) ->
-                case str:str(H,<<"conference">>) of
-                0 ->
-                    [{U,H}];
-                _ ->
-                    []
-               end end,Res),
-            case UL of
-            [] ->
-                State;
-            _ ->
-                ets:insert(muc_users,{{State#state.room,State#state.host},UL}),
-             do_invite_all_register_user(UL,Packet,State)
-            end;
+        [{_,UL}] when is_list(UL) -> do_invite_all_register_user(UL,Packet,State);
         _ ->
-            State
-        end
+            case catch qtalk_sql:get_muc_users(State#state.server_host,State#state.room,State#state.host) of
+            {selected,_,Res} when is_list(Res) ->
+                UL = lists:flatmap(fun([U,H]) ->
+                    case str:str(H,<<"conference">>) of
+                        0 -> [{U,H}];
+                        _ -> []
+                    end
+                end, Res),
+
+                case UL of
+                [] -> State;
+                _ ->
+                    ets:insert(muc_users,{{State#state.room,State#state.host},UL}),
+                    do_invite_all_register_user(UL,Packet,State)
+                end;
+            _ -> State
+            end
     end.
-
-
 
 do_invite_all_register_user(UL,Packet,StateData) ->
     lists:foldl(fun({U,H},State) ->
         Nick =  qtalk_public:get_nick(U,H),
         case jlib:make_jid(U,H,<<"">>)  of
-        error ->
-            ?INFO_MSG("Invite register user make jid error U ~p,H ~p ~n",[U,H]),
-            State;
-        From ->
-            case str:str(H,<<"conference">>) of
-            0 ->
-                add_new_user(From,Nick,Packet,State);
-            _ ->
-                State
-            end
-        end end,StateData,UL).
+            error -> ?INFO_MSG("Invite register user make jid error U ~p,H ~p ~n",[U,H]), State;
+            From ->
+                case str:str(H,<<"conference">>) of
+                    0 -> add_new_user(From,Nick,Packet,State);
+                    _ -> State
+                end
+        end
+    end, StateData,UL).
 
 %%%%%%%%--------------------------------------------------------------------
 %%%%%%%% @date 2017-03-01
@@ -5275,10 +5244,8 @@ do_invite_all_register_user(UL,Packet,StateData) ->
 %%%%%%%%--------------------------------------------------------------------
 is_user_online_with_no_resource(JID, StateData) ->
     LJID = jlib:jid_tolower(JID),
-    NR_JID =  jlib:jid_tolower(jlib:jid_remove_resource(JID)),
+    NR_JID = jlib:jid_tolower(jlib:jid_remove_resource(JID)),
     (?DICT):is_key(NR_JID, StateData#state.users) orelse (?DICT):is_key(LJID, StateData#state.users).
-
-
 
 %%%%%%%%--------------------------------------------------------------------
 %%%%%%%% @date 2017-03-01
@@ -5286,19 +5253,15 @@ is_user_online_with_no_resource(JID, StateData) ->
 %%%%%%%%--------------------------------------------------------------------
 check_jid_is_register(JID,Room,Host) ->
     case catch ets:lookup(muc_users,{Room,Host}) of
-    [] ->
-        false;
-    [{_,UL}] when is_list(UL) ->
-        lists:member({JID#jid.luser,JID#jid.lserver},UL);
-    _ ->
-        false
+        [] -> false;
+        [{_,UL}] when is_list(UL) -> lists:member({JID#jid.luser,JID#jid.lserver},UL);
+        _ -> false
     end.
 
 %%%%%%%%--------------------------------------------------------------------
 %%%%%%%% @date 2017-03-01
 %%%%%%%% iq 信令创建群组 
 %%%%%%%%--------------------------------------------------------------------
-
 process_iq_create_muc(_From,get,_Lang,_SubEl,_StateData) ->
     {error, ?ERR_NOT_ALLOWED};
 process_iq_create_muc(From,set,_Lang,_SubEl,StateData) ->
@@ -5309,16 +5272,16 @@ process_iq_create_muc(From,set,_Lang,_SubEl,StateData) ->
     Nick = qtalk_public:get_nick(From#jid.luser,From#jid.lserver),
     Packet = qtalk_public:make_default_presence_packet(ItemAttrs),
 
-    %%catch mod_muc:store_room(StateData#state.server_host,StateData#state.host, StateData#state.room, make_opts(StateData)),
 
     case add_new_user(From, Nick,Packet,StateData) of
-    StateData ->
-        {result,
-            [#xmlel{name = <<"create_muc">> , attrs = [{<<"result">>,<<"failed">>}],  children = []}],StateData};
-    NewState ->
-        add_muc_new_user(From,NewState),
-        {result,
-            [#xmlel{name = <<"create_muc">> , attrs = [{<<"result">>,<<"success">>}],  children = []}],NewState}
+        StateData -> {result, [#xmlel{name = <<"create_muc">> ,
+                                      attrs = [{<<"result">>,<<"failed">>}],
+                                      children = []}],StateData};
+        NewState ->
+            add_muc_new_user(From,NewState),
+            {result, [#xmlel{name = <<"create_muc">> ,
+                             attrs = [{<<"result">>,<<"success">>}],
+                             children = []}],NewState}
     end.
 
 
@@ -5327,15 +5290,16 @@ process_iq_create_muc(From,set,_Lang,_SubEl,StateData) ->
 %%%%%%%% 向群中添加新用户
 %%%%%%%%--------------------------------------------------------------------
 add_muc_new_user(From,State) ->
-    Packet =
-        jlib:iq_to_xml(#iq{type = result,
-            sub_el = [#xmlel{name = <<"add_user">>, attrs = [{<<"xmlns">>, ?NS_MUC_ADD_USER}], children = []}]}),
+    Packet = jlib:iq_to_xml(#iq{type = result,
+                                sub_el = [#xmlel{name = <<"add_user">>,
+                                                 attrs = [{<<"xmlns">>, ?NS_MUC_ADD_USER}],
+                                                 children = []}]}),
     ejabberd_router:route(State#state.jid,From,Packet),
-    case catch qtalk_muc:set_muc_room_users(State#state.server_host,From#jid.user,State#state.room,State#state.host,From#jid.lserver) of
-    true ->
-        handle_service_message(make_invite_text(From,From#jid.luser,From#jid.lserver,State),From,State);
-    _ ->
-        ok
+    case 
+        catch qtalk_muc:set_muc_room_users(State#state.server_host,From#jid.user,State#state.room,State#state.host,From#jid.lserver)
+    of
+        true -> handle_service_message(make_invite_text(From,From#jid.luser,From#jid.lserver,State),From,State);
+        _ -> ok
     end.
 
 %%%%%%%%--------------------------------------------------------------------
@@ -5346,22 +5310,16 @@ handle_service_message(Msg ,IJID,StateData) ->
     BID = list_to_binary("http_" ++ integer_to_list(random:uniform(65536)) ++ integer_to_list(qtalk_public:get_exact_timestamp())),
     Now = qtalk_public:get_exact_timestamp(),
     MessagePkt = #xmlel{name = <<"message">>,
-            attrs = [{<<"type">>, <<"groupchat">>}, {<<"msec_times">>,integer_to_binary(Now)}],
-            children =
-                [#xmlel{name = <<"body">>, attrs = [{<<"msgType">>,<<"15">>},{<<"id">>,BID}],
-                    children = [{xmlcdata, Msg}]}]},
+                        attrs = [{<<"type">>, <<"groupchat">>}, {<<"msec_times">>,integer_to_binary(Now)}],
+                        children = [#xmlel{name = <<"body">>,
+                                           attrs = [{<<"msgType">>,<<"15">>},{<<"id">>,BID}],
+                                           children = [{xmlcdata, Msg}]}]},
     case jlib:jid_replace_resource(StateData#state.jid,<<"群系统通知"/utf8>>) of
-    error ->
-        ?INFO_MSG("Make muc_system admin error ~n",[StateData#state.jid]),
-        ok;
+    error -> ?INFO_MSG("Make muc_system admin error ~n",[StateData#state.jid]), ok;
     JID ->
-        lists:foreach(
-        fun({_LJID, Info}) ->
-          ejabberd_router:route(
-            JID,
-            Info#user.jid,
-            MessagePkt)
-           end, ?DICT:to_list(StateData#state.users)),
+        lists:foreach(fun({_LJID, Info}) ->
+            ejabberd_router:route( JID, Info#user.jid, MessagePkt)
+        end, ?DICT:to_list(StateData#state.users)),
         ServerHost = StateData#state.server_host,
         NewPacket = qtalk_public:add_attrs_realfrom(MessagePkt,<<"admin@", ServerHost/binary>>, Now),
         catch ejabberd_router:route(JID,IJID,NewPacket),
@@ -5379,10 +5337,8 @@ make_invite_text(Jid,Invite,IServer,StateData) ->
         end;
     false ->
         case Nick =:= INick of
-        true ->
-            list_to_binary([INick,<<" 进入聊天室."/utf8>>]);
-        _ ->
-            list_to_binary([Nick, <<" 邀请 "/utf8>>,INick,<<" 进入聊天室."/utf8>>])
+        true -> list_to_binary([INick,<<" 进入聊天室."/utf8>>]);
+        _ -> list_to_binary([Nick, <<" 邀请 "/utf8>>,INick,<<" 进入聊天室."/utf8>>])
         end
     end.
 
@@ -5390,84 +5346,24 @@ make_invite_text(Jid,Invite,IServer,StateData) ->
 %%%%%%%% @date 2017-03-01
 %%%%%%%% handle revoke  muc msg
 %%%%%%%%--------------------------------------------------------------------
-
 handle_muc_revoke_msg(From,Packet,StateData) ->
     UL = do_get_muc_room_users(StateData),
     case catch revoke:revoke_groupchat_message(StateData#state.server_host,From,StateData#state.jid,Packet,UL) of
-    true ->
-        {FromNick, _Role} = get_participant_data(From,StateData),
-            lists:foreach(
-                fun({_LJID, Info}) ->
-                    ejabberd_router:route(
-                        jlib:jid_replace_resource(
-                        StateData#state.jid,
-                        case FromNick of
-                        <<"">> ->
-                            From#jid.luser;
-                        _ ->
-                            FromNick
-                        end ),
-                    Info#user.jid,
-                    Packet)
-                end,?DICT:to_list(StateData#state.users));
-    Err ->
-        ?DEBUG("Err ~p ~n",[Err]),
-        ok
-    end.
-
-%%%%%%%%--------------------------------------------------------------------
-%%%%%%%% @date 2017-03-01
-%%%%%%%% 处理群用户成员列表
-%%%%%%%%--------------------------------------------------------------------
-
-%process_iq_muc_member(_From,get,_Lang,_SubEl,StateData) ->
-%    {result,get_muc_registed_users(StateData),StateData};
-%process_iq_muc_member(From,set,_Lang,_SubEl,StateData) ->
- %   {error,?ERR_FORBIDDEN}.
-
-
-%%%%%%%%--------------------------------------------------------------------
-%%%%%%%% @date 2017-03-01
-%%%%%%%% 处理群邀请v1版本
-%%%%%%%%--------------------------------------------------------------------
-process_iq_invtie(_From,get,_Lang,_SubEl,_StateData) ->
-    {error,?ERR_FORBIDDEN};
-process_iq_invtie(_From,set,_Lang,SubEl,StateData) ->
-   RUsers = qtalk_muc:get_muc_registed_user_num(StateData#state.room,StateData#state.host),
-   MUsers = get_max_users(StateData),
-
-   if RUsers < MUsers  ->
-        case fxml:get_subtag(SubEl, <<"invite">>) of
-        false  ->
-            {error,?ERR_FORBIDDEN};
-        El ->
-            case fxml:get_tag_attr_s(<<"jid">>,El) of
-            <<"">> ->
-                {result,[],StateData};
-            User ->
-                case jlib:string_to_jid(User) of
-                error ->
-                    {result,[],StateData};
-                Invite ->
-                    case catch qtalk_muc:set_muc_room_users(StateData#state.server_host,Invite#jid.user,StateData#state.room,StateData#state.host,Invite#jid.lserver) of
-                    true ->
-                        catch notice_invite_user_iq(Invite,StateData),
-                        {result,[#xmlel{name = <<"iq_invite">> , attrs = [{<<"jid">>,User},{<<"status">>,
-                                case ejabberd_sm:get_user_resources(Invite#jid.user,StateData#state.server_host) of
-                                [] ->
-                                        <<"offline">>;
-                                _ ->
-                                        <<"online">>
-                                end }],  children = []}], 
-                                add_muc_room_user(r_flag,Invite#jid.user,Invite#jid.lserver,StateData)};
-                    false ->
-                        {error,?ERR_FORBIDDEN}
-                    end
-                end
-            end
-        end;
-    true ->
-        {error,?ERR_FORBIDDEN}
+        true ->
+            {FromNick, _Role} = get_participant_data(From,StateData),
+                lists:foreach(
+                    fun({_LJID, Info}) ->
+                        ejabberd_router:route(
+                            jlib:jid_replace_resource(StateData#state.jid,
+                                case FromNick of
+                                <<"">> -> From#jid.luser;
+                                _ -> FromNick
+                                end
+                            ),
+                            Info#user.jid,
+                            Packet)
+                end, ?DICT:to_list(StateData#state.users));
+        Err -> ?ERROR_MSG("Err ~p ~n",[Err]), ok
     end.
 
 %%%%%%%%--------------------------------------------------------------------
@@ -5481,36 +5377,33 @@ process_iq_invtie_v2(From,set,_Lang,SubEl,StateData) ->
     RUsers = qtalk_muc:get_muc_registed_user_num(StateData#state.room,StateData#state.host),
     if RUsers < MUsers ->
         case fxml:get_subtags(SubEl ,<<"invite">>) of
-        [] ->
-            {result,[],StateData};
-        Els when is_list(Els) ->
-            Res =
-                lists:foldl(fun(El,Acc) ->
+            [] -> {result,[],StateData};
+            Els when is_list(Els) ->
+                Res = lists:foldl(fun(El,Acc) ->
                     case fxml:get_tag_attr_s(<<"jid">>,El) of
-                    <<"">> ->
-                        Acc;
-                    User ->
-                        case jlib:string_to_jid(User) of
-                        error ->
-                            handle_muc_iq_invites(Acc,false,error,error,<<"1">>,
-                                    [#xmlel{name = <<"muc_invites">> , attrs = [{<<"jid">>,User},{<<"status">>,<<"1">>}],children = []}]);
-                        Invite ->
-                            case catch qtalk_muc:set_muc_room_users(StateData#state.server_host,Invite#jid.user,
-									StateData#state.room,StateData#state.host,Invite#jid.lserver) of
-                            true ->
-                                handle_muc_iq_invites(Acc,true,From,Invite,<<"0">>,
-                                    [#xmlel{name = <<"muc_invites">> , attrs = [{<<"jid">>,User},{<<"status">>,<<"0">>}],  children = []}]);
-                            false ->
-                                handle_muc_iq_invites(Acc,false,From,Invite,<<"1">>,
-                                        [#xmlel{name = <<"muc_invites">> , attrs = [{<<"jid">>,User},{<<"status">>,<<"1">>}],children = []}])
+                        <<"">> -> Acc;
+                        User ->
+                            case jlib:string_to_jid(User) of
+                            error ->
+                                handle_muc_iq_invites(Acc,false,error,error,<<"1">>,
+                                        [#xmlel{name = <<"muc_invites">> , attrs = [{<<"jid">>,User},{<<"status">>,<<"1">>}],children = []}]);
+                            Invite ->
+                                case catch qtalk_muc:set_muc_room_users(StateData#state.server_host,Invite#jid.user,
+			    						StateData#state.room,StateData#state.host,Invite#jid.lserver) of
+                                true ->
+                                    handle_muc_iq_invites(Acc,true,From,Invite,<<"0">>,
+                                        [#xmlel{name = <<"muc_invites">> , attrs = [{<<"jid">>,User},{<<"status">>,<<"0">>}],  children = []}]);
+                                false ->
+                                    handle_muc_iq_invites(Acc,false,From,Invite,<<"1">>,
+                                            [#xmlel{name = <<"muc_invites">> , attrs = [{<<"jid">>,User},{<<"status">>,<<"1">>}],children = []}])
+                                end
                             end
-                        end
-                    end end ,{result,[],StateData,RUsers},Els),
-            handle_iq_invite_res(Res,RUsers,StateData)
+                    end
+                end, {result,[],StateData,RUsers},Els),
+                handle_iq_invite_res(Res,RUsers,StateData)
         end;
-    true ->
-        {error,?ERR_FORBIDDEN}
-     end.
+    true -> {error,?ERR_FORBIDDEN}
+    end.
 
 handle_iq_invite_res({result,Result ,State,Num},RUsers,_StateData) ->
     case Num > RUsers  andalso RUsers < 9 of
@@ -5539,50 +5432,35 @@ process_iq_muc_register(From,set,_Lang,_SubEl,StateData) ->
 %%%%%%%% @date 2017-03-01
 %%%%%%%% 处理群邀请，生成结果
 %%%%%%%%--------------------------------------------------------------------
-handle_muc_iq_invites(E,_,error,_,_,_) ->
-    E;
-handle_muc_iq_invites(E,_,_,error,_,_) ->
-    E;
+handle_muc_iq_invites(E,_,error,_,_,_) -> E;
+handle_muc_iq_invites(E,_,_,error,_,_) -> E;
 handle_muc_iq_invites({result,Els,State,Num},Flag,JID,Invite,Status,El) ->
     case Flag of
-    true ->
-        Packet =
-            jlib:iq_to_xml(#iq{type = result,
-                sub_el = [#xmlel{name = <<"add_user">>, attrs = [{<<"xmlns">>, ?NS_MUC_ADD_USER}], children = []}]}),
-        ejabberd_router:route(State#state.jid,Invite,Packet),
-        make_inviete_presence_and_msg(JID,Invite#jid.luser,Invite#jid.lserver,Status,State),
-        {result,El ++ Els,add_muc_room_user(true,Invite#jid.luser,Invite#jid.lserver,State),Num+1};
-    false ->
-        {result,El ++ Els,State,Num}
+        true ->
+            Packet = jlib:iq_to_xml(#iq{type = result,
+                                        sub_el = [#xmlel{name = <<"add_user">>,
+                                                         attrs = [{<<"xmlns">>, ?NS_MUC_ADD_USER}],
+                                                         children = []}]}),
+            ejabberd_router:route(State#state.jid,Invite,Packet),
+            make_inviete_presence_and_msg(JID,Invite#jid.luser,Invite#jid.lserver,Status,State),
+            {result,El ++ Els,add_muc_room_user(true,Invite#jid.luser,Invite#jid.lserver,State),Num+1};
+        false -> {result,El ++ Els,State,Num}
     end.
-
-%%%%%%%%--------------------------------------------------------------------
-%%%%%%%% @date 2017-03-01
-%%%%%%%% 发送邀请结果IQ
-%%%%%%%%--------------------------------------------------------------------
-notice_invite_user_iq(From,StateData) ->
-    IQRes =
-    #iq{type = result,
-        sub_el = [#xmlel{name = <<"query">>,
-            attrs =    [{<<"xmlns">>,?NS_MUC_SET_REGISTER}],
-             children = [#xmlel{name = <<"set_register">> , attrs = [],  children = []}]}]},
-     ejabberd_router:route(StateData#state.jid, From,
-                         jlib:iq_to_xml(IQRes)).
-
 
 %%%%%%%%--------------------------------------------------------------------
 %%%%%%%% @date 2017-03-01
 %%%%%%%% 发送用户入群presence v2版本
 %%%%%%%%--------------------------------------------------------------------
 make_inviete_presence_and_msg(JID,User,Server,Status,StateData) ->
-    Packet =
-        #xmlel{name = <<"presence">>,
-                attrs = [{<<"xmlns">>,?NS_MUC_INVITE}, {<<"invite_jid">>, <<User/binary,"@",Server/binary>>},{<<"status">>,Status}],    children = []},
+    Packet = #xmlel{name = <<"presence">>,
+                    attrs = [{<<"xmlns">>,?NS_MUC_INVITE}, {<<"invite_jid">>, <<User/binary,"@",Server/binary>>},{<<"status">>,Status}],
+                    children = []},
+
     lists:foreach(fun({_LJID, Info}) ->
-          ejabberd_router:route(StateData#state.jid,Info#user.jid, Packet)  end,
-             (?DICT):to_list(StateData#state.users)),
+          ejabberd_router:route(StateData#state.jid,Info#user.jid, Packet)
+    end, (?DICT):to_list(StateData#state.users)),
     
-     IJID = jlib:make_jid({User,Server,<<"">>}),
+    IJID = jlib:make_jid({User,Server,<<"">>}),
 
     handle_service_message(make_invite_text(JID,User,Server,StateData),IJID,StateData).
 
@@ -5591,38 +5469,28 @@ make_inviete_presence_and_msg(JID,User,Server,Status,StateData) ->
 %%%%%%%% 添加群用户(发送信令)
 %%%%%%%%--------------------------------------------------------------------
 add_muc_room_user(Flag,User,Server,StateData) ->
-    Packet =
-        #xmlel{name = <<"presence">>,
-            attrs = [{<<"priority">>,<<"5">>},{<<"version">>,<<"2">>}],
-                children = [
-                    #xmlel{name = <<"x">>,
-                     attrs =[{<<"xmlns">>,
-                        ?NS_MUC}],
-                     children = []}
-                    ]},
+    Packet = #xmlel{name = <<"presence">>,
+                    attrs = [{<<"priority">>,<<"5">>},{<<"version">>,<<"2">>}],
+                    children = [ #xmlel{name = <<"x">>,
+                                        attrs =[{<<"xmlns">>, ?NS_MUC}],
+                                        children = []}]},
     Nick =  qtalk_public:get_nick(User),
+
     case jlib:make_jid(User,Server,<<"">>) of
-    error ->
-        ?INFO_MSG("Make jid error U ~p,H ~p ~n",[User,Server]),
-        StateData;
-    From ->
-        do_add_muc_room_user(Flag,From,Nick,Packet,StateData)
+        error -> ?INFO_MSG("Make jid error U ~p,H ~p ~n",[User,Server]), StateData;
+        From -> do_add_muc_room_user(Flag,From,Nick,Packet,StateData)
     end.
 
 do_add_muc_room_user(true,From,Nick,Packet,StateData) ->
     add_new_user(From, Nick,Packet,StateData);
 do_add_muc_room_user(r_flag,From,Nick,Packet,StateData) ->
     case ejabberd_sm:get_user_resources(From#jid.luser,From#jid.lserver) of
-    [] ->
-        do_add_new_user(false,From, Nick,Packet,StateData);
-    L when is_list(L) ->
-        case lists:filter(fun(R) ->
-            str:str(R,<<"P[Mac]_">>) =/= 0 end,L) of
-        [] ->
-            do_add_new_user(false,From, Nick,Packet,StateData);
-        _ ->
-            add_new_user(From, Nick,Packet,StateData)
-        end
+        [] -> do_add_new_user(false,From, Nick,Packet,StateData);
+        L when is_list(L) ->
+            case lists:filter(fun(R) -> str:str(R,<<"P[Mac]_">>) =/= 0 end, L) of
+                [] -> do_add_new_user(false,From, Nick,Packet,StateData);
+                _ -> add_new_user(From, Nick,Packet,StateData)
+            end
     end;
 do_add_muc_room_user(_,From,Nick,Packet,StateData) ->
     do_add_new_user(false,From, Nick,Packet,StateData).
@@ -5631,28 +5499,17 @@ do_add_muc_room_user(_,From,Nick,Packet,StateData) ->
 %%%%%%%% @date 2017-03-01
 %%%%%%%% 通过Flag判断是否发送presence消息
 %%%%%%%%--------------------------------------------------------------------
-
 send_presence_by_flag(true,From, Attrs,State,OldStateData) ->
+    ?INFO_MSG("muc_room ~p add ~p new user ~p ~n",[State#state.room, fxml:get_attr_s(<<"version">>, Attrs), From#jid.luser]),
     case fxml:get_attr_s(<<"version">>, Attrs) of
-    <<"2">> ->
-        ?INFO_MSG("muc_room ~p add v2 new user ~p ~n",[State#state.room,From#jid.luser]),
-        send_user_join_muc_presence_v2(From, <<"">>,State);
-    <<"p2">> ->
-        ?INFO_MSG("muc_room ~p add p2 new user ~p ~n",[State#state.room,From#jid.luser]);
-    _ ->
-        ?INFO_MSG("muc_room ~p add v1 new user ~p ~n",[State#state.room,From#jid.luser]),
-        send_existing_presences(From, State),
-        send_new_presence(From,State, OldStateData)
+        <<"2">> -> send_user_join_muc_presence_v2(From, <<"">>,State);
+        <<"p2">> -> ok;
+        _ ->
+            send_existing_presences(From, State),
+            send_new_presence(From,State, OldStateData)
     end;
 send_presence_by_flag(_,From,Attrs,State,_OldStateData) ->
-    case fxml:get_attr_s(<<"version">>, Attrs) of
-    <<"2">> ->
-        ?INFO_MSG("muc_room  ~p add v2 new user ~p ~n",[State#state.room,From#jid.luser]);
-    <<"p2">> ->
-        ?INFO_MSG("muc_room  ~p add p2 new user ~p ~n",[State#state.room,From#jid.luser]);
-    _ ->
-        ?INFO_MSG("muc_room  ~p add v1 new user ~p ~n",[State#state.room,From#jid.luser])
-    end.
+    ?INFO_MSG("muc_room ~p add ~p new user ~p ~n",[State#state.room, fxml:get_attr_s(<<"version">>, Attrs), From#jid.luser]).
 
     
 %%%%%%%%--------------------------------------------------------------------
@@ -5660,22 +5517,17 @@ send_presence_by_flag(_,From,Attrs,State,_OldStateData) ->
 %%%%%%%% 发送用户入群presence v2版本
 %%%%%%%%--------------------------------------------------------------------
 send_user_join_muc_presence_v2(NJID, Reason, StateData) ->
-    #user{nick = Nick} =
-    (?DICT):fetch(jlib:jid_tolower(NJID),
-              StateData#state.users),
+    #user{nick = Nick} = (?DICT):fetch(jlib:jid_tolower(NJID), StateData#state.users),
     LJID = find_jid_by_nick(Nick, StateData),
     RealJID = NJID,
-    {ok,
-     #user{jid = _RealJID, role = Role,
-       last_presence = Presence}} =
-    (?DICT):find(jlib:jid_tolower(LJID),
-             StateData#state.users),
+    {ok, #user{jid = _RealJID, role = Role, last_presence = Presence}} =
+        (?DICT):find(jlib:jid_tolower(LJID), StateData#state.users),
 
     Affiliation = get_affiliation(LJID, StateData),
     SAffiliation = affiliation_to_list(Affiliation),
     SRole = role_to_list(Role),
-    ItemAttrs =
-        case  (StateData#state.config)#config.anonymous  == false  of
+
+    ItemAttrs = case  (StateData#state.config)#config.anonymous  == false  of
         true ->
                 [{<<"jid">>,
                       jlib:jid_to_string(RealJID)},
@@ -5688,49 +5540,39 @@ send_user_join_muc_presence_v2(NJID, Reason, StateData) ->
                  {<<"real_jid">>,LJID#jid.luser},
                  {<<"domain">>,LJID#jid.lserver},
                  {<<"role">>, SRole}]
-          end,
+    end,
+
     ItemEls = case Reason of
         <<"">> -> [];
         _ ->
               [#xmlel{name = <<"reason">>,
                   attrs = [],
-                  children =
-                      [{xmlcdata, Reason}]}]
-        end,
-     Status = case StateData#state.just_created of
-              true ->
-                 [#xmlel{name = <<"status">>,
-                 attrs =
-                     [{<<"code">>, <<"201">>}],
-                 children = []}];
-               false -> []
-             end,
-    Status2 =  [#xmlel{name = <<"status">>,
-                      attrs =
-                          [{<<"code">>, <<"110">>}],
-                      children = []}
-                   | Status],
-    Packet =
-        case Presence of
-        undefined ->
-            qtalk_public:make_default_presence_packet(ItemAttrs);
+                  children = [{xmlcdata, Reason}]}]
+    end,
+
+    Status = case StateData#state.just_created of
+        true ->
+            [#xmlel{name = <<"status">>,
+                    attrs = [{<<"code">>, <<"201">>}],
+                    children = []}];
+        false -> []
+    end,
+
+    Status2 = [#xmlel{name = <<"status">>,
+                      attrs = [{<<"code">>, <<"110">>}],
+                      children = []} | Status],
+
+    Packet = case Presence of
+        undefined -> qtalk_public:make_default_presence_packet(ItemAttrs);
         _ ->
             fxml:append_subtags(Presence,
                       [#xmlel{name = <<"x">>,
-                          attrs =
-                              [{<<"xmlns">>,
-                            ?NS_MUC_USER}],
-                          children =
-                          [#xmlel{name =
-                                  <<"item">>,
-                              attrs
-                                  =
-                              ItemAttrs,
-                              children
-                                  =
-                                  ItemEls}
-                           | Status2]}])
-        end,
+                              attrs = [{<<"xmlns">>, ?NS_MUC_USER}],
+                              children = [#xmlel{name = <<"item">>,
+                                                 attrs = ItemAttrs,
+                                                 children = ItemEls} | Status2]}])
+    end,
+
     ejabberd_router:route(jlib:jid_replace_resource(StateData#state.jid, Nick),RealJID, Packet). 
 
 %%%%%%%%--------------------------------------------------------------------
@@ -5739,57 +5581,51 @@ send_user_join_muc_presence_v2(NJID, Reason, StateData) ->
 %%%%%%%%--------------------------------------------------------------------
 get_muc_room_users(StateData) ->
     case ets:lookup(muc_users,{StateData#state.room,StateData#state.host}) of
-    [] ->
-        UL = 
-            case catch qtalk_sql:get_muc_users(StateData#state.server_host,StateData#state.room,StateData#state.host) of
-            {selected,_,Res} when is_list(Res) ->
-                lists:flatmap(fun([U,H]) ->
-                case str:str(H,<<"conference">>) of
-                0 ->
-                    [{U,H}];
-                _ ->
-                    []
-               end end,Res);
-            _ ->
-                []
-            end,
-        case UL of
         [] ->
-            ok;
-        _ ->
-            ets:insert(muc_users,{{StateData#state.room,StateData#state.host},UL})
-        end,
-        lists:map(fun ({U,H}) ->
-            Attrs = make_muc_user_attrs(U,H,StateData),
+            UL = case catch qtalk_sql:get_muc_users(StateData#state.server_host,StateData#state.room,StateData#state.host) of
+                {selected,_,Res} when is_list(Res) ->
+                    lists:flatmap(fun([U,H]) ->
+                        case str:str(H,<<"conference">>) of
+                            0 -> [{U,H}];
+                            _ -> []
+                        end
+                    end,Res);
+                _ -> []
+            end,
+
+            case UL of
+                [] -> ok;
+                _ -> ets:insert(muc_users,{{StateData#state.room,StateData#state.host},UL})
+            end,
+
+            lists:map(fun ({U,H}) ->
+                Attrs = make_muc_user_attrs(U,H,StateData),
                 #xmlel{name = <<"m_user">>,
-                        attrs = Attrs,
-            children = []} end,UL);
-    [{_,UL1}] when is_list(UL1) ->
-        lists:map(fun ({U,H}) ->
-            Attrs = make_muc_user_attrs(U,H,StateData),
-            #xmlel{name = <<"m_user">>,
-                    attrs =     Attrs,
-                     children = []} end,UL1);
-    _ ->
-        []
+                       attrs = Attrs,
+                       children = []}
+            end, UL);
+        [{_,UL}] when is_list(UL) ->
+            lists:map(fun ({U,H}) ->
+                Attrs = make_muc_user_attrs(U,H,StateData),
+                #xmlel{name = <<"m_user">>,
+                       attrs = Attrs,
+                       children = []}
+            end, UL);
+        _ -> []
     end.
 
 %%%%%%%%--------------------------------------------------------------------
 %%%%%%%% @date 2017-03-01
 %%%%%%%% 生成用户注册列表属性
 %%%%%%%%--------------------------------------------------------------------
-
 make_muc_user_attrs(User,Host,StateData) ->
     case jlib:make_jid({User,Host,<<"">>}) of
-    error ->
-        [{<<"jid">>,jlib:jid_to_string({User,Host,<<"">>})}];
-    JID ->
-        case affiliation_to_list(get_affiliation(JID, StateData)) of
-         <<"none">> ->
-            [{<<"jid">>,jlib:jid_to_string({User,Host,<<"">>})}];
-        Role ->
-            [{<<"jid">>,jlib:jid_to_string({User,Host,<<"">>})},{<<"affiliation">>,Role}]
-        end
+        error -> [{<<"jid">>,jlib:jid_to_string({User,Host,<<"">>})}];
+        JID ->
+            case affiliation_to_list(get_affiliation(JID, StateData)) of
+            <<"none">> -> [{<<"jid">>,jlib:jid_to_string({User,Host,<<"">>})}];
+            Role -> [{<<"jid">>,jlib:jid_to_string({User,Host,<<"">>})},{<<"affiliation">>,Role}]
+            end
     end.
 
 %%%%%%%%--------------------------------------------------------------------
@@ -5807,43 +5643,34 @@ process_iq_del_muc_user(From,set,_Lang,_SubEl,StateData) ->
 %%%%%%%% 处理用户ＩＱ获取权限信息操作
 %%%%%%%%--------------------------------------------------------------------
 process_iq_authority(_From,get,_Lang,_SubEl,StateData) ->
-    Affiliations =
-        lists:flatmap(fun({J,Affiliation}) ->
-            case Affiliation of
+    Affiliations = lists:flatmap(fun({J,Affiliation}) ->
+        case Affiliation of
             {Affiliation1,_} ->
                 LAffiliation = affiliation_to_list(Affiliation1),
                 case jlib:jid_to_string(J) of
-                error  ->
-                    [];
-                JID ->
-                    [#xmlel{name = <<"authority">> , attrs = [{LAffiliation,JID}],  children = []}]
+                error  -> [];
+                JID -> [#xmlel{name = <<"authority">> , attrs = [{LAffiliation,JID}],  children = []}]
                 end;
-            _ ->
-                []
-            end end,?DICT:to_list(StateData#state.affiliations)),
+            _ -> []
+        end
+    end, ?DICT:to_list(StateData#state.affiliations)),
     {result,Affiliations,StateData};
 process_iq_authority(_From,set,_Lang,_SubEl,_StateData) ->
     {error,?ERR_FORBIDDEN}.
-
 
 %%%%%%%%--------------------------------------------------------------------
 %%%%%%%% @date 2017-03-01
 %%%%%%%% 处理用户ＩＱ在线注册者
 %%%%%%%%--------------------------------------------------------------------
-process_iq_online_register(From,get,_Lang,_SubEl,StateData) ->
-    ?INFO_MSG("process_iq_online_register ~p ~n",[From]),
-    Online_registers =
-        lists:flatmap(fun ({FromNick, _Users}) ->
-          LJID = find_jid_by_nick(FromNick, StateData),
-         %% #user{jid = FromJID} =  (?DICT):fetch(jlib:jid_tolower(LJID),
-%                StateData#state.users),
-          [#xmlel{name = <<"online_register">> ,
-                  attrs = [{<<"nick">>,     FromNick},
-                           {<<"jid">>,      LJID#jid.luser},
-                           {<<"domain">>,   LJID#jid.lserver}],
-                           children = []}]
-          end,
-        (?DICT):to_list(StateData#state.nicks)),
+process_iq_online_register(_From, get, _Lang, _SubEl, StateData) ->
+    Online_registers = lists:flatmap(fun ({FromNick, _Users}) ->
+         LJID = find_jid_by_nick(FromNick, StateData),
+         [#xmlel{name = <<"online_register">> ,
+                 attrs = [{<<"nick">>,   FromNick},
+                          {<<"jid">>,    LJID#jid.luser},
+                          {<<"domain">>, LJID#jid.lserver}],
+                          children = []}]
+    end, (?DICT):to_list(StateData#state.nicks)),
     {result,Online_registers,StateData};
 process_iq_online_register(_From,set,_Lang,_SubEl,_StateData) ->
     {error,?ERR_FORBIDDEN}.
@@ -5851,12 +5678,10 @@ process_iq_online_register(_From,set,_Lang,_SubEl,_StateData) ->
 
 %%%%%%%%--------------------------------------------------------------------
 %%%%%%%% @date 2017-03-01
-%%%%%%%% 发送删除注册的ｐｒｅｓｅｎｃｅ和ｉｑ消息
+%%%%%%%% 发送删除注册的presence和iq消息
 %%%%%%%%--------------------------------------------------------------------
-
 send_muc_del_registed_presence_v2(NJID,StateData) ->
-       Packet =
-        jlib:iq_to_xml(#iq{type = result,sub_el = [#xmlel{name = <<"del_user">>, attrs = [{<<"xmlns">>, ?NS_MUC_DEL_USER}], children = []}]}),
+    Packet = jlib:iq_to_xml(#iq{type = result,sub_el = [#xmlel{name = <<"del_user">>, attrs = [{<<"xmlns">>, ?NS_MUC_DEL_USER}], children = []}]}),
     ejabberd_router:route(StateData#state.jid,jlib:jid_remove_resource(NJID),Packet).
 
 send_muc_del_registed_presence(NJID,StateData) ->
@@ -5876,154 +5701,87 @@ send_muc_del_registed_presence(NJID,StateData) ->
 
 %%%%%%%%--------------------------------------------------------------------
 %%%%%%%% @date 2017-03-01
-%%%%%%%% Ｔ掉同一个用户在群众的所有ＪＩＤ，并删除注册
+%%%%%%%% Ｔ掉同一个用户在群众的所有jid，并删除注册
 %%%%%%%%--------------------------------------------------------------------
 kick_user_all_jid(User,Server,_Reason,SD) ->
     case jlib:make_jid(User,Server,<<"">>) of
-    error ->
-        SD;
-    JID ->
-        catch send_kickban_presence(<<"">>, JID, <<"">>,<<"110">>, SD),
-        set_role(JID, none, SD)
+        error -> SD;
+        JID ->
+            catch send_kickban_presence(<<"">>, JID, <<"">>,<<"110">>, SD),
+            set_role(JID, none, SD)
     end.
 
 %%%%%%%%--------------------------------------------------------------------
 %%%%%%%% @date 2017-03-01
 %%%%%%%% 根据IQ的XMLNS发送通知presence
 %%%%%%%%--------------------------------------------------------------------
-handle_xmlns_presence(From,SubEl,Type,XMLNS,StateData) ->
+handle_xmlns_presence(From, _SubEl, Type, XMLNS, StateData) ->
     case {XMLNS,Type} of
-    {?NS_MUC_DEL_REGISTER,set} ->
-        catch send_muc_del_registed_presence_v2(From,StateData);
-    {?NS_MUC_INVITE,set} ->
-        catch send_muc_invite_presence(From,SubEl,StateData);
-    _ ->
-        ok
-    end.
-
-
-
-%%%%%%%%--------------------------------------------------------------------
-%%%%%%%% @date 2017-03-01
-%%%%%%%% 发送群邀请通知presence
-%%%%%%%%--------------------------------------------------------------------
-send_muc_invite_presence(NJID,SubEl,StateData) ->
-    case fxml:get_subtag(SubEl, <<"invite">>) of
-    false  ->
-        ok;
-    El ->
-        case fxml:get_tag_attr_s(<<"jid">>,El) of
-        <<"">> ->
-            ok;
-        User ->
-            case jlib:string_to_jid(User) of
-            error ->
-                ok;
-            Invite_jid ->
-                    Packet = #xmlel{name = <<"presence">>,
-                        attrs = [{<<"xmlns">>,?NS_MUC_INVITE}, {<<"invite_jid">>, User},{<<"status">>,
-                        case ejabberd_sm:get_user_resources(Invite_jid#jid.user,StateData#state.server_host) of
-                        [] ->
-                            <<"offline">>;
-                        _ ->
-                            <<"online">>
-                        end}
-                        ],
-                        children = []},
-                    lists:foreach(fun({_LJID, Info}) ->
-                                  ejabberd_router:route(StateData#state.jid,Info#user.jid, Packet)  end,  (?DICT):to_list(StateData#state.users)),
-
-                    Packet1 =
-                        jlib:iq_to_xml(#iq{type = result,
-                                sub_el = [#xmlel{name = <<"add_user">>, attrs = [{<<"xmlns">>, ?NS_MUC_ADD_USER}], children = []}]}),
-                    ejabberd_router:route(StateData#state.jid,Invite_jid,Packet1),
-                handle_service_message(make_invite_text(NJID,Invite_jid#jid.luser,Invite_jid#jid.lserver,StateData),Invite_jid,StateData)
-            end
-        end
+        {?NS_MUC_DEL_REGISTER,set} -> catch send_muc_del_registed_presence_v2(From,StateData);
+        _ -> ok
     end.
 
 check_Attrs_JID(User,Domain,Attrs,StateData) ->
     case fxml:get_attr(<<"role">>, Attrs) of
-    false ->
-        case fxml:get_attr(<<"affiliation">>, Attrs) of
-        {value,<<"admin">>} ->
-             case jlib:make_jid(User,Domain,<<"">>) of
-             error ->
-                {error, ?ERR_NOT_ALLOWED};
-             Jid ->
-             {value, [Jid]}
-             end;
-        {value,<<"member">>} ->
-             case jlib:make_jid(User,Domain,<<"">>) of
-             error ->
-                {error, ?ERR_NOT_ALLOWED};
-             Jid ->
-             {value, [Jid]}
-             end;
-        _ ->
-            {error, ?ERR_NOT_ALLOWED}
-        end;
-    {value, <<"none">>} ->
-        case jlib:make_jid(User,Domain,<<"">>) of
-        error ->
-            {error, ?ERR_NOT_ALLOWED};
-        JID ->
-            catch qtalk_muc:del_muc_room_users(StateData#state.server_host,StateData#state.room,StateData#state.host,User,Domain),
-            catch send_muc_del_registed_presence(JID,StateData),
-            {value, [JID]}
-        end;
-    _ ->
-        {error, ?ERR_NOT_ALLOWED}
+        false ->
+            case fxml:get_attr(<<"affiliation">>, Attrs) of
+            {value,<<"admin">>} ->
+                 case jlib:make_jid(User,Domain,<<"">>) of
+                 error -> {error, ?ERR_NOT_ALLOWED};
+                 Jid -> {value, [Jid]}
+                 end;
+            {value,<<"member">>} ->
+                 case jlib:make_jid(User,Domain,<<"">>) of
+                 error -> {error, ?ERR_NOT_ALLOWED};
+                 Jid -> {value, [Jid]}
+                 end;
+            _ -> {error, ?ERR_NOT_ALLOWED}
+            end;
+        {value, <<"none">>} ->
+            case jlib:make_jid(User,Domain,<<"">>) of
+            error -> {error, ?ERR_NOT_ALLOWED};
+            JID ->
+                catch qtalk_muc:del_muc_room_users(StateData#state.server_host,StateData#state.room,StateData#state.host,User,Domain),
+                catch send_muc_del_registed_presence(JID,StateData),
+                {value, [JID]}
+            end;
+        _ -> {error, ?ERR_NOT_ALLOWED}
     end.
 
-
 send_muc_message(StateData,From,FromNick,Packet) ->
-    lists:foreach(
-        fun({_LJID, Info}) ->
-            NewFrom = jlib:jid_replace_resource(
-                    StateData#state.jid,
-                    case FromNick of
-                    <<"">> ->
-                        From#jid.luser;
-                    _ ->
-                        FromNick
-                    end ),
-            To = Info#user.jid, 
-            NewPacket = jlib:replace_from_to(NewFrom, To, Packet),
-            ejabberd_router:route(NewFrom,To,NewPacket)    end, ?DICT:to_list(StateData#state.users)).
-
+    lists:foreach(fun({_LJID, Info}) ->
+        NewFrom = jlib:jid_replace_resource(StateData#state.jid,
+            case FromNick of
+                <<"">> -> From#jid.luser;
+                _ -> FromNick
+            end),
+        To = Info#user.jid, 
+        NewPacket = jlib:replace_from_to(NewFrom, To, Packet),
+        ejabberd_router:route(NewFrom,To,NewPacket)
+    end, ?DICT:to_list(StateData#state.users)).
 
 do_get_muc_room_users(StateData) ->
     case ets:lookup(muc_users,{StateData#state.room,StateData#state.host}) of
-    [] ->
-        UL = 
-            case catch qtalk_sql:get_muc_users(StateData#state.server_host,StateData#state.room,StateData#state.host) of
-            {selected,_,Res} when is_list(Res) ->
-                lists:flatmap(fun([U,H]) ->
-                case str:str(H,<<"conference">>) of
-                0 ->
-                    [{U,H}];
-                _ ->
-                    []
-               end end,Res);
-            _ ->
-                []
-            end,
-        case UL of
         [] ->
-            ok;
-        _ ->
-            ets:insert(muc_users,{{StateData#state.room,StateData#state.host},UL})
-        end,
-        lists:map(fun ({U,H}) ->
-            <<U/binary, "@", H/binary>> 
-        end,UL);
-    [{_,UL1}] when is_list(UL1) ->
-        lists:map(fun ({U,H}) ->
-                    <<U/binary, "@", H/binary>> 
-        end, UL1);
-    _ ->
-        []
+            UL = case catch qtalk_sql:get_muc_users(StateData#state.server_host,StateData#state.room,StateData#state.host) of
+                {selected,_,Res} when is_list(Res) ->
+                    lists:flatmap(fun([U,H]) ->
+                        case str:str(H,<<"conference">>) of
+                            0 -> [{U,H}];
+                            _ -> []
+                        end
+                    end, Res);
+                _ -> []
+            end,
+    
+            case UL of
+                [] -> ok;
+                _ -> ets:insert(muc_users,{{StateData#state.room,StateData#state.host},UL})
+            end,
+    
+            lists:map(fun ({U,H}) -> <<U/binary, "@", H/binary>> end, UL);
+        [{_,UL}] when is_list(UL) -> lists:map(fun ({U,H}) -> <<U/binary, "@", H/binary>> end, UL);
+        _ -> []
     end.
 
 %% 将所有消息通过接口发送个第三方服务

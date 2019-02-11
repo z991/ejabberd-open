@@ -73,6 +73,7 @@ IM数据库服务
 + 数据库初始化sql在doc目录下
 + 保证可访问主机的：5222、5202、8080端口（关掉防火墙：sudo systemctl stop firewalld.service）
 + IM服务的域名是:qtalk.test.org
++ tls证书：默认安装用的是一个测试证书，线上使用，请更换/startalk/ejabberd/etc/ejabberd/server.pem文件，生成方法见[securing-ejabberd-with-tls-encryption](https://blog.process-one.net/securing-ejabberd-with-tls-encryption/)
 
 ```
 依赖包
@@ -206,7 +207,7 @@ ERLANGPATH=/startalk/erlang1903
 PATH=$PATH:$HOME/bin:$ERLANGPATH/bin
 ----------------------------------
  
-$ . .bash_profile
+$ . ~/.bash_profile
 
 安装ejabberd
 $ cd /home/startalk/download

@@ -197,7 +197,7 @@ ERLANGPATH=/startalk/erlang1903
 PATH=$PATH:$HOME/bin:$ERLANGPATH/bin
 ----------------------------------
  
-$ . .bash_profile
+$ . ~/.bash_profile
 
 安装ejabberd
 $ cd /home/startalk/download

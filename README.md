@@ -176,7 +176,15 @@ insert into vcard_version (username, version, profile_version, gender, host, url
 insert into host_users (host_id, user_id, user_name, department, dep1, pinyin, frozen_flag, version, user_type, hire_flag, gender, password, initialpwd, ps_deptid) values ('1', 'file-transfer', '文件传输助手', '/智能服务助手', '智能服务助手', 'file-transfer', '1', '1', 'U', '1', '1', '15f15057f5be45c6bb6522d08078e0d4', '1', 'qtalk');
 insert into vcard_version (username, version, profile_version, gender, host, url) values ('file-transfer', '1', '1', '1', 'qtalk.test.org', 'https://qt.qunar.com/file/v2/download/avatar/new/daa8a007ae74eb307856a175a392b5e1.png?name=daa8a007ae74eb307856a175a392b5e1.png&file=file/daa8a007ae74eb307856a175a392b5e1.png&fileName=file/daa8a007ae74eb307856a175a392b5e1.png');
 "
+9 psql连接数据库
 
+psql -U postgres -d ejabberd -h 127.0.0.1
+psql (9.2.24, server 11.1)
+WARNING: psql version 9.2, server version 11.0.
+         Some psql features might not work.
+Type "help" for help.
+
+ejabberd=# 
 
 openresty安装
 $ cd /home/startalk/download

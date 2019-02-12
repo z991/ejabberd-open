@@ -235,7 +235,7 @@ $ make install
 $ vim ~/.bash_profile
  
 ----------------------------------
-$ User specific environment and startup programs
+# User specific environment and startup programs
 ERLANGPATH=/startalk/erlang1903
 PATH=$PATH:$HOME/bin:$ERLANGPATH/bin
 ----------------------------------

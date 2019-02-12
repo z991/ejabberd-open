@@ -97,7 +97,20 @@ IM数据库服务
 # sudo yum install epel-release
 # sudo yum -y update
 # sudo yum -y groupinstall Base "Development Tools" "Perl Support"
-# sudo yum -y install openssl openssl-devel unixODBC unixODBC-devel pkgconfig libSM libSM-devel libxslt ncurses-devel libyaml libyaml-devel expat expat-devel libxml2-devel libxml2 java-1.8.0-openjdk  java-1.8.0-openjdk-devel  pam-devel pcre-devel gd-devel bzip2-devel zlib-devel libicu-devel libwebp-devel gmp-devel curl-devel postgresql-devel libtidy libtidy-devel recode aspell libmcrypt  libmemcached gd
+# sudo yum -y install openssl openssl-devel unixODBC unixODBC-devel pkgconfig libSM libSM-devel libxslt ncurses-devel libyaml libyaml-devel expat expat-devel libxml2-devel libxml2 java-1.8.0-openjdk  java-1.8.0-openjdk-devel  pam-devel pcre-devel gd-devel bzip2-devel zlib-devel libicu-devel libwebp-devel gmp-devel curl-devel postgresql-devel libtidy libtidy-devel recode aspell libmcrypt  libmemcached gd readline-devel libxslt-devel
+
+新建安装目录
+$ sudo mkdir /startalk
+$ sudo chown startalk:startalk /startalk
+
+下载源码
+$ cd /home/startalk/download
+$ git clone https://github.com/qunarcorp/ejabberd-open.git
+$ git clone https://github.com/qunarcorp/or_open.git
+$ git clone https://github.com/qunarcorp/qtalk_cowboy_open.git
+
+$ cp ejabberd_open/doc/qtalk.sql /startalk/
+$ chmod 777 /startalk/qtalk.sql
 
 redis安装
 sudo yum install -y redis
@@ -148,7 +161,7 @@ su - postgres
  
 6. 初始化DB结构
  
-/opt/pg11/bin/psql -U postgres -d postgres -f qtalk.sql
+/opt/pg11/bin/psql -U postgres -d postgres -f /startalk/qtalk.sql
  
 7. 初始化DB user: ejabberd的密码
  
@@ -163,16 +176,6 @@ insert into vcard_version (username, version, profile_version, gender, host, url
 insert into host_users (host_id, user_id, user_name, department, dep1, pinyin, frozen_flag, version, user_type, hire_flag, gender, password, initialpwd, ps_deptid) values ('1', 'file-transfer', '文件传输助手', '/智能服务助手', '智能服务助手', 'file-transfer', '1', '1', 'U', '1', '1', '15f15057f5be45c6bb6522d08078e0d4', '1', 'qtalk');
 insert into vcard_version (username, version, profile_version, gender, host, url) values ('file-transfer', '1', '1', '1', 'qtalk.test.org', 'https://qt.qunar.com/file/v2/download/avatar/new/daa8a007ae74eb307856a175a392b5e1.png?name=daa8a007ae74eb307856a175a392b5e1.png&file=file/daa8a007ae74eb307856a175a392b5e1.png&fileName=file/daa8a007ae74eb307856a175a392b5e1.png');
 "
-
-新建安装目录
-$ sudo mkdir /startalk
-$ sudo chown startalk:startalk /startalk
-
-下载源码
-$ cd /home/startalk/download
-$ git clone https://github.com/qunarcorp/ejabberd-open.git
-$ git clone https://github.com/qunarcorp/or_open.git
-$ git clone https://github.com/qunarcorp/qtalk_cowboy_open.git
 
 
 openresty安装

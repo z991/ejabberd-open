@@ -7,16 +7,18 @@
 * 对startalk来说，配置中的domain 非常重要，请务必仔细配置，保持一致。
 * 在开始之前请务必保证以下几个端口没有被占用：
 ```
-http服务：
-8080 8081 8082 8083 8888 10056
+openresty服务：8080
+im_http_service服务：8005 8009 8081
+qfproxy服务：8006 8010 8082
+push_service服务：8006 8011 8083
+qtalk_search服务：8888
+qtalk_cowboy_server服务：10056
 
-im服务：
-5222 5201 5202 
+im服务： 5222 5201 5202 
 
-db:
-5432 
-redis:
-6379
+db: 5432 
+
+redis: 6379
 ```
 
 

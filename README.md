@@ -342,4 +342,4 @@ $ ./bin/startup.sh
 ## 问题反馈
 
 - qchat@qunar.com（邮件）
-- qq群(852987381)
+- 852987381（QQ群）

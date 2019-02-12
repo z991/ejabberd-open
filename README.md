@@ -80,8 +80,8 @@ IM数据库服务
 前提条件(如果主机名，用户名和这里的不一致，则需要将安装步骤中的换成自己的名字)：
 
 + 服务器要求：centos7
-+ hosts添加： 127.0.0.1 startalk.com
 + 主机名是：startalk.com
++ hosts添加： 127.0.0.1 startalk.com
 + 所有项目都安装到/startalk下面
 + 安装用户和用户组是：startalk:startalk，要保证startalk用户有sudo权限
 + 家目录下有download文件夹，所有文件会下载到该文件夹下

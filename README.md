@@ -341,4 +341,5 @@ $ ./bin/startup.sh
 
 ## 问题反馈
 
--   qchat@qunar.com（邮件）
+- qchat@qunar.com（邮件）
+- 852987381（QQ群）

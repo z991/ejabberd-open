@@ -15,11 +15,11 @@
 -export([get_muc_users/3,get_user_muc_subscribe/3,get_user_register_muc/2]).
 -export([insert_muc_users_sub_push/5,del_muc_user/4,del_user_muc_subscribe/4,add_user_muc_subscribe/6]).
 -export([get_muc_opts/3,get_muc_vcard_info/3,insert_muc_users/5]).
--export([get_user_register_mucs/3,insert_muc_msg/8,add_spool_sql_v2/3]).
+-export([get_user_register_mucs/3,insert_muc_msg/8]).
 -export([insert_warn_msg/8,insert_msg_v1/8,insert_msg_v2/8]).
--export([insert_user_register_mucs/5,update_register_mucs/6,add_spool_away/5,del_muc_vcard_info/3,restore_muc_user_mark/3]).
+-export([insert_user_register_mucs/5,update_register_mucs/6,del_muc_vcard_info/3,restore_muc_user_mark/3]).
 -export([del_user_register_mucs/3,get_concats/2,get_muc_concats/2,insert_user_block_list/3]).
--export([del_muc_users/3,get_department_info/1,get_rbt_info/1,get_rbt_pubsub/1,get_department_info1/1]).
+-export([del_muc_users/3,get_department_info/1,get_department_info1/1]).
 -export([get_blacklist/1,get_whitelist/1,insert_subscribe_msg/5]).
 -export([get_s2s_host_info/1,get_muc_user_host/4,get_muc_user_host/3]).
 -export([insert_muc_vcard_info/7,clear_spool/1,clear_user_mac_key/1,clear_muc_spool/1,get_muc_msg_last_timestamp/2]).
@@ -184,12 +184,6 @@ del_muc_vcard_info(LServer,Muc,Reason) ->
         end
     end.
 
-add_spool_away(LServer,FromUser,User,XML,NFlag) ->
-    ejabberd_sql:sql_query(LServer,
-        %%?SQL("insert into spool(from_username, username, xml ,away_flag,notice_flag)  values ("
-        %%    "%(FromUser)s,%(User)s,%(XML)s,'1',%(NFlag)s)")).
-        [<<"insert into spool(from_username, username, xml ,away_flag,notice_flag)  values ('">>, FromUser, <<"', '">>, User, <<"', '">>, XML, <<"', '1', '">>, NFlag, <<"');">>]).
-
 update_register_mucs(LServer,User,Host,Muc,Domain,RFlag) ->
  %   Flag = binary_to_integer(RFlag),
     case catch ejabberd_sql:sql_query(LServer,
@@ -255,16 +249,6 @@ insert_subscribe_msg(LServer,SubUsers,Muc,Nick,Msg) ->
     ejabberd_sql:sql_query(LServer,
                 [<<"select spilt_users_to_insert_xml('">>,SubUsers,<<"','">>,Muc,<<"','">>,Nick,<<"','">>,Msg,<<"');">>]).
 
-get_rbt_info(LServer) ->
-    ejabberd_sql:sql_query(LServer,
-        %%?SQL("select @(en_name)s,@(cn_name)s,@(request_url)s,@(rbt_body)s,@(rbt_version)s from robot_info;")).
-        [<<"select en_name,host, cn_name, request_url, rbt_body, rbt_version from robot_info;">>]).
-
-get_rbt_pubsub(LServer) ->
-    ejabberd_sql:sql_query(LServer,
-        %%?SQL("select @(user_name)s,@(rbt_name)s from robot_pubsub;")).
-        [<<"select user_name, user_host,rbt_name,rbt_host from robot_pubsub;">>]).
-
 get_host_info(LServer) ->
 	ejabberd_sql:sql_query(LServer,
 		[<<"select id,host from host_info;">>]).
@@ -295,23 +279,6 @@ insert_muc_vcard_info(LServer,Muc,Nick,Desc,Title,Pic,Ver) ->
             Pic, <<"', ">>,
             Ver, <<");">>]).
 
-clear_spool(LServer) ->
-    ejabberd_sql:sql_query(LServer,
-            %%?SQL("delete from spool where username not in (select username from users where hire_flag > 0 );")).
-            [<<"delete from spool where username not in (select user_id from host_users where hire_flag > 0 );">>]).
-
-clear_user_mac_key(LServer) ->
-    ejabberd_sql:sql_query(LServer,
-            [<<"delete from user_mac_key where user_name not in (select user_id from host_users where hire_flag > 0);">>]),
-    ejabberd_sql:sql_query(LServer,
-            [<<"delete from person_user_mac_key where user_name not in (select user_id from host_users where hire_flag > 0);">>]).
-
-
-clear_muc_spool(LServer) ->
-     ejabberd_sql:sql_query(LServer,
-            %%?SQL("delete from muc_spool where username not in (select username from users where hire_flag  > 0);")).
-            [<<"delete from muc_spool where username not in (select user_id from host_users where hire_flag  > 0);">>]).
-
 get_muc_msg_last_timestamp(LServer, Muc) ->
     ejabberd_sql:sql_query(LServer,
         [<<"select extract(epoch from create_time) from muc_room_history where muc_room_name = '">>,  Muc,
@@ -337,18 +304,10 @@ list_users(LServer) ->
             %%?SQL("select @(username)s from users where hire_flag > 0;")).
             [<<"select user_id from host_users where hire_flag > 0;">>]).
 
-del_muc_spool(LServer,User) ->
-    ejabberd_sql:sql_query(LServer,
-            [<<"delete from muc_spool where username = '">>,User,<<"';">>]).
-
-del_spool(LServer,User) ->
-	ejabberd_sql:sql_query(LServer,
-		[<<"delete from spool where username = '">>,User,<<"';">>]).
-
 get_password_by_host(Host,User) ->
 	ejabberd_sql:sql_query(Host,
 		[<<"select password from host_users where host_id in (select id from host_info where host = '">>,
-			Host,<<"') and user_id = '">>,User,<<"';">>]).
+			Host,<<"') and user_id = '">>,User,<<"' and hire_flag = '1';">>]).
 
 
 update_no_insert(Table, Fields, Vals, Where) ->
@@ -370,14 +329,6 @@ insert_msg_by_table(LServer,Table,From,From_host,To,To_host,MsgID,Time,Packet) -
             [<<"insert into ">>,Table,<<" (m_from,from_host,m_to,to_host,m_body,msg_id,create_time) values ('">>,
                 From,<<"','">>,From_host,<<"','">>,To,<<"','">>,To_host,<<"','">>,
                 ejabberd_sql:escape(Packet),<<"','">>,MsgID,<<"',">>,Time,<<");">>]).
-
-add_spool_sql_v2(FUser,LUser, XML) ->
-    %%?SQL("insert into spool(from_username,username, xml) values (%(FUser)s ,%(LUser)s, %(XML)s)").
-    [<<"insert into spool(from_username,username, xml) values ('">>, FUser, <<"', '">>, LUser, <<"', '">>, XML, <<"');">>]. 
-
-
-
-
 
 join([], _Sep) -> [];
 join([H | T], Sep) -> [H, [[Sep, X] || X <- T]].

@@ -105,7 +105,7 @@ sudo vim /etc/redis.conf
  
 daemonize yes
 requirepass 123456
-maxmemory 134217728   ##128Mbytes
+maxmemory 134217728
  
 启动redis
 sudo redis-server /etc/redis.conf

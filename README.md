@@ -184,7 +184,12 @@ WARNING: psql version 9.2, server version 11.0.
          Some psql features might not work.
 Type "help" for help.
 
-ejabberd=# 
+ejabberd=# select * from host_users;
+ id | host_id |    user_id    |  user_name   |  department   | tel | email |     dep1     | dep2 | dep3 | dep4 | dep5 |    pinyin     | frozen_flag | version | user_type | hire_flag | gender |          password             | initialpwd | ps_deptid 
+----+---------+---------------+--------------+---------------+-----+-------+--------------+------+------+------+------+---------------+-------------+---------+-----------+-----------+--------+---------- ------------------------+------------+-----------
+  1 |       1 | test          | 测试账号     | /机器人       |     |       | 机器人       |      |      |      |      | test          |           0 |       1 | U         |         1 |      1 | 1234567890                       |          1 | qtalk
+  2 |       1 | file-transfer | 文件传输助手 | /智能服务助手 |     |       | 智能服务助手 |      |      |      |      | file-transfer |           1 |       1 | U         |         1 |      1 | 15f15057f5be45c6bb6522d08078e0d4 |          1 | qtalk
+(2 rows)
 
 openresty安装
 $ cd /home/startalk/download

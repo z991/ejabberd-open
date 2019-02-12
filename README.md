@@ -341,6 +341,8 @@ $ cd /startalk/tomcat/push_service
 $ ./bin/startup.sh
 
 客户端配置导航地址：http://ip:8080/newapi/nck/qtalk_nav.qunar，使用账号：test，密码：1234567890登陆
+
+可以在二维码生成网站[http://www.liantu.com/](http://www.liantu.com/)生成导航地址的二维码，然后通过扫码在手机客户端添加导航
 ```
 
 ## 配置文件修改

@@ -781,6 +781,7 @@ CREATE TABLE public.host_users (
     gender smallint DEFAULT 0 NOT NULL,
     password text,
     initialpwd smallint DEFAULT 1 NOT NULL,
+    pwd_salt character varying(200),
     ps_deptid text DEFAULT 'QUNAR'::text
 );
 

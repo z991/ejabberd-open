@@ -14,8 +14,8 @@
 -include("logger.hrl").
 
 check_user_password(Host, User, Password) ->
-    R = case qtalk_sql:get_password_by_host(Host, User) of
-        {selected,_, [[Password1]]} -> 
+    R = case qtalk_sql:get_password_salt_by_host(Host, User) of
+        {selected,_, [[Password1, Salt]]} -> 
             case catch rsa:dec(base64:decode(Password)) of
                 Json when is_binary(Json) ->
                     {ok,{obj,L},[]} = rfc4627:decode( Json),
@@ -27,7 +27,7 @@ check_user_password(Host, User, Password) ->
                         NewKey = qtalk_public:concat(User,<<"@">>,Host),
                         catch set_user_mac_key(Host,NewKey,Key)
                     end,
-                    do_check_host_user(Host,User,Password1,Pass);
+                    do_check_host_user(Password1,Pass, Salt);
                _ -> false
            end;
         _ -> false
@@ -39,8 +39,10 @@ check_user_password(Host, User, Password) ->
 
     R.
 
-do_check_host_user(_Host, _User, Password, Pass) ->
-   Password =:= Pass. 
+do_check_host_user(Password, Password, _) -> true;
+do_check_host_user(_, _, null) -> false;
+do_check_host_user(Password,Pass, Salt) ->
+       p1_sha:to_hexlist(erlang:md5(<<Pass/binary, Salt/binary>>)) =:= Password.
 
 %%--------------------------------------------------------------------
 %%%% @date 2017-03-01

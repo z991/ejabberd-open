@@ -788,6 +788,8 @@ CREATE TABLE public.host_users (
 
 ALTER TABLE public.host_users OWNER TO postgres;
 
+COMMENT ON COLUMN host_users.pwd_salt IS '密码salt';
+
 --
 -- TOC entry 226 (class 1259 OID 17363)
 -- Name: host_users_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres

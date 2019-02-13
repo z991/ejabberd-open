@@ -781,11 +781,14 @@ CREATE TABLE public.host_users (
     gender smallint DEFAULT 0 NOT NULL,
     password text,
     initialpwd smallint DEFAULT 1 NOT NULL,
+    pwd_salt character varying(200),
     ps_deptid text DEFAULT 'QUNAR'::text
 );
 
 
 ALTER TABLE public.host_users OWNER TO postgres;
+
+COMMENT ON COLUMN host_users.pwd_salt IS '密码salt';
 
 --
 -- TOC entry 226 (class 1259 OID 17363)

@@ -24,7 +24,7 @@
 -export([get_s2s_host_info/1,get_muc_user_host/4,get_muc_user_host/3]).
 -export([insert_muc_vcard_info/7,get_muc_msg_last_timestamp/2]).
 -export([delete_muc_last/2,get_white_list_users/1,update_no_insert/4]).
--export([list_users/1,get_flogin_user/1,insert_msg_by_table/9,get_password_by_host/2]).
+-export([list_users/1,get_flogin_user/1,insert_msg_by_table/9,get_password_by_host/2,get_password_salt_by_host/2]).
 -export([get_host_info/1]).
 
 get_muc_users(LServer, Muc, Domain) ->
@@ -307,6 +307,11 @@ list_users(LServer) ->
 get_password_by_host(Host,User) ->
 	ejabberd_sql:sql_query(Host,
 		[<<"select password from host_users where host_id in (select id from host_info where host = '">>,
+			Host,<<"') and user_id = '">>,User,<<"' and hire_flag = '1';">>]).
+
+get_password_salt_by_host(Host,User) ->
+	ejabberd_sql:sql_query(Host,
+		[<<"select password, pwd_salt from host_users where host_id in (select id from host_info where host = '">>,
 			Host,<<"') and user_id = '">>,User,<<"' and hire_flag = '1';">>]).
 
 

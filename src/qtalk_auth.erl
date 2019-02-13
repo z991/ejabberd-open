@@ -9,6 +9,7 @@
 -export([wlan_check_password/3,check_frozen_flag/1]).
 -export([kick_token_login_user/2]).
 -export([check_user_password/3]).
+-export([do_md5/1]).
 
 -include("ejabberd.hrl").
 -include("logger.hrl").
@@ -42,8 +43,12 @@ check_user_password(Host, User, Password) ->
 do_check_host_user(Password, Password, null) -> true;
 do_check_host_user(_, _, null) -> false;
 do_check_host_user(Password,Pass, Salt) ->
-       p1_sha:to_hexlist(erlang:md5(<<Pass/binary, Salt/binary>>)) =:= Password.
+    P1 = do_md5(Pass),
+    P2 = do_md5(<<P1/binary, Salt/binary>>),
+    do_md5(P2) =:= Password.
 
+do_md5(S) ->
+     p1_sha:to_hexlist(erlang:md5(S)).
 %%--------------------------------------------------------------------
 %%%% @date 2017-03-01
 %%%%% WLAN 密码验证

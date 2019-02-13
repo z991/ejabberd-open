@@ -39,7 +39,7 @@ check_user_password(Host, User, Password) ->
 
     R.
 
-do_check_host_user(Password, Password, _) -> true;
+%%do_check_host_user(Password, Password, _) -> true;
 do_check_host_user(_, _, null) -> false;
 do_check_host_user(Password,Pass, Salt) ->
        p1_sha:to_hexlist(erlang:md5(<<Pass/binary, Salt/binary>>)) =:= Password.

@@ -22,8 +22,8 @@
 -export([del_muc_users/3,get_department_info/1,get_department_info1/1]).
 -export([get_blacklist/1,get_whitelist/1,insert_subscribe_msg/5]).
 -export([get_s2s_host_info/1,get_muc_user_host/4,get_muc_user_host/3]).
--export([insert_muc_vcard_info/7,clear_spool/1,clear_user_mac_key/1,clear_muc_spool/1,get_muc_msg_last_timestamp/2]).
--export([delete_muc_last/2,get_white_list_users/1,update_no_insert/4,del_muc_spool/2,del_spool/2]).
+-export([insert_muc_vcard_info/7,get_muc_msg_last_timestamp/2]).
+-export([delete_muc_last/2,get_white_list_users/1,update_no_insert/4]).
 -export([list_users/1,get_flogin_user/1,insert_msg_by_table/9,get_password_by_host/2]).
 -export([get_host_info/1]).
 

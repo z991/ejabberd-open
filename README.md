@@ -154,7 +154,7 @@ $ sudo ./configure --prefix=/opt/pg11 --with-perl --with-libxml --with-libxslt
  
 $ sudo make world
 #编译的结果最后必须如下，否则需要检查哪里有error
-#All of PostgreSQL successfully made. Ready to install.
+#PostgreSQL, contrib, and documentation successfully made. Ready to install.
  
 $ sudo make install-world
 #安装的结果做后必须如下，否则没有安装成功
@@ -164,7 +164,7 @@ $ sudo make install-world
 $ sudo groupadd postgres
   
 $ sudo useradd -g postgres postgres
-  
+$ sudo passwd postgres  
 $ sudo mkdir -p /export/pg110_data
   
 $ sudo chown postgres:postgres /export/pg110_data
@@ -180,7 +180,6 @@ $ /opt/pg11/bin/pg_ctl -D /export/pg110_data start
 确认启动成功
 $ sudo netstat -antlp | grep 5432
 tcp        0      0 127.0.0.1:5432          0.0.0.0:*               LISTEN      4751/postmaster     
-tcp6       0      0 ::1:5432                :::*                    LISTEN      4751/postmaster
  
 6. 初始化DB结构
  
@@ -194,9 +193,9 @@ $ /opt/pg11/bin/psql -U postgres -d postgres -c "ALTER USER ejabberd WITH PASSWO
  
 $ /opt/pg11/bin/psql -U postgres -d ejabberd -c "
 insert into host_info (host, description, host_admin) values ('qtalk.test.org', 'qtalk.test.org', 'test');
-insert into host_users (host_id, user_id, user_name, department, dep1, pinyin, frozen_flag, version, user_type, hire_flag, gender, password, initialpwd, pwd_salt, ps_deptid) values ('1', 'test', '测试账号', '/机器人', '机器人', 'test', '0', '1', 'U', '1', '1', '3b4fedb1b85315703614435785f96fde', '1', 'qtalkadmin_pwd_salt_d2bf42081aab47f4ac00697d7dd32993', 'qtalk');
+insert into host_users (host_id, user_id, user_name, department, dep1, pinyin, frozen_flag, version, user_type, hire_flag, gender, password, initialpwd, pwd_salt, ps_deptid) values ('1', 'test', '测试账号', '/机器人', '机器人', 'test', '0', '1', 'U', '1', '1', 'fd540f073cc09aa98220bbb234153bd5', '1', 'qtalkadmin_pwd_salt_d2bf42081aab47f4ac00697d7dd32993', 'qtalk');
 insert into vcard_version (username, version, profile_version, gender, host, url) values ('test', '1', '1', '1', 'qtalk.test.org', 'https://qt.qunar.com/file/v2/download/avatar/1af5bc967f8535a4af19eca10dc95cf1.png');
-insert into host_users (host_id, user_id, user_name, department, dep1, pinyin, frozen_flag, version, user_type, hire_flag, gender, password, initialpwd, pwd_salt, ps_deptid) values ('1', 'file-transfer', '文件传输助手', '/智能服务助手', '智能服务助手', 'file-transfer', '1', '1', 'U', '1', '1', '3b4fedb1b85315703614435785f96fde', '1', 'qtalkadmin_pwd_salt_d2bf42081aab47f4ac00697d7dd32993', 'qtalk');
+insert into host_users (host_id, user_id, user_name, department, dep1, pinyin, frozen_flag, version, user_type, hire_flag, gender, password, initialpwd, pwd_salt, ps_deptid) values ('1', 'file-transfer', '文件传输助手', '/智能服务助手', '智能服务助手', 'file-transfer', '1', '1', 'U', '1', '1', 'fd540f073cc09aa98220bbb234153bd5', '1', 'qtalkadmin_pwd_salt_d2bf42081aab47f4ac00697d7dd32993', 'qtalk');
 insert into vcard_version (username, version, profile_version, gender, host, url) values ('file-transfer', '1', '1', '1', 'qtalk.test.org', 'https://qt.qunar.com/file/v2/download/avatar/new/daa8a007ae74eb307856a175a392b5e1.png?name=daa8a007ae74eb307856a175a392b5e1.png&file=file/daa8a007ae74eb307856a175a392b5e1.png&fileName=file/daa8a007ae74eb307856a175a392b5e1.png');
 "
 9 psql连接数据库

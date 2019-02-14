@@ -103,6 +103,8 @@ IM数据库服务
 新建安装用户
 # groupadd startalk
 # useradd -g startalk startalk
+给startalk用户设置密码
+# passwd startalk
 
 新建安装目录
 # mkdir /startalk

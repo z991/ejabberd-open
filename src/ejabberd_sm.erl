@@ -79,7 +79,6 @@
 	 get_user_session/2,
 	 add_datetime_to_packet/3,
 	 add_msectime_to_packet/4,
-         do_make_verify_friend_packet1/4,
          delete_presence_spool/3,
 	 online/1,
 	 get_sm_backend/1,
@@ -1052,11 +1051,6 @@ make_verify_friend_packet(Num, Rslt, _From, _To, Packet, Attrs) ->
 do_make_verify_friend_packet(XMLNS,Rslt,Reason,Two_ways) ->
     {#xmlel{name = <<"presence">>,
             attrs = [{<<"xmlns">>,XMLNS},{<<"type">>,<<"handle_friend_result">>},{<<"result">>,Rslt},{<<"reason">>,Reason}],
-            children = []},Two_ways}.
-
-do_make_verify_friend_packet1(XMLNS, _Rslt, Reason, Two_ways) ->
-    {#xmlel{name = <<"presence">>,
-            attrs = [{<<"xmlns">>,XMLNS},{<<"body">>,Reason}],
             children = []},Two_ways}.
 
 send_presence_packet(From,To,Packet) ->

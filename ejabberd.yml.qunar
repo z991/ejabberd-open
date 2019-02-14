@@ -604,7 +604,7 @@ redis_tab: "0,1,2,3,5,7,10,11,15"
 ##
 modules: 
   mod_adhoc: {}
-  mod_client_state: {}
+  ## mod_client_state: {}
   mod_configure: {} # requires mod_adhoc
   mod_http_bind: {}
   mod_muc: 
@@ -625,9 +625,9 @@ modules:
         persistent: true
         public: false
         public_list: false
-  mod_offline: 
-    access_max_user_messages: max_user_offline_messages
-    db_type: sql
+  ## mod_offline: 
+  ##   access_max_user_messages: max_user_offline_messages
+  ##   db_type: sql
   mod_ping: {}
   mod_extend_iq: {}
   mod_http_service: {}

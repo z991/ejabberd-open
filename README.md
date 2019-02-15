@@ -103,17 +103,22 @@ IM数据库服务
 新建安装用户
 # groupadd startalk
 # useradd -g startalk startalk
-给startalk用户设置密码
 # passwd startalk
+
+# groupadd postgres
+# useradd -g postgres postgres
+# passwd postgres  
 
 新建安装目录
 # mkdir /startalk
 # chown startalk:startalk /startalk
 
 为startalk用户添加sudo权限
-# vim /etc/sudoers
+# visudo 
 
-在行(root    ALL= (ALL)    ALL)行后添加(startalk     ALL= (ALL)    ALL)
+在行(root    ALL= (ALL)    ALL)行后添加
+(startalk     ALL= (ALL)    ALL)
+(postgres     ALL= (ALL)    ALL)
 保存后退出
 
 下载源码
@@ -161,10 +166,6 @@ $ sudo make install-world
 #PostgreSQL installation complete.
  
 3. 添加postgres OS用户
-$ sudo groupadd postgres
-  
-$ sudo useradd -g postgres postgres
-$ sudo passwd postgres  
 $ sudo mkdir -p /export/pg110_data
   
 $ sudo chown postgres:postgres /export/pg110_data

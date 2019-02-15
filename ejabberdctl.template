@@ -430,6 +430,12 @@ wait_for_status()
     [ $timeout -eq 0 ] && return 1 || return 0
 }
 
+# output current version
+version()
+{
+     echo "ejabberd version: v1.0.0"
+}
+
 # main handler
 case "${ARGS[0]}" in
     'start') start;;
@@ -440,6 +446,7 @@ case "${ARGS[0]}" in
     'foreground') foreground;;
     'ping'*) ping ${ARGS[1]};;
     'etop') etop;;
+    'version') version;;
     'started') wait_for_status 0 30 2;; # wait 30x2s before timeout
     'stopped') wait_for_status 3 30 2 && stop_epmd;; # wait 30x2s before timeout
     *) ctl "${ARGS[@]}";;

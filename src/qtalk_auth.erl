@@ -40,12 +40,14 @@ check_user_password(Host, User, Password) ->
 
     R.
 
-do_check_host_user(Password, Password, null) -> true;
-do_check_host_user(_, _, null) -> false;
-do_check_host_user(Password,Pass, Salt) ->
+do_check_host_user(<<"CRY:", _>>, _, null) -> false;
+do_check_host_user(<<"CRY:", Password/binary>>,Pass, Salt) ->
     P1 = do_md5(Pass),
     P2 = do_md5(<<P1/binary, Salt/binary>>),
-    do_md5(P2) =:= Password.
+    do_md5(P2) =:= Password;
+do_check_host_user(Password, Password, _) -> true;
+do_check_host_user(_, _, _) -> false.
+
 
 do_md5(S) ->
      p1_sha:to_hexlist(erlang:md5(S)).

@@ -407,6 +407,7 @@ tcp6       0      0 127.0.0.1:8006          :::*                    LISTEN      
 ```
 
 到此，服务端已经安装完成，请下载[startalk客户端](https://im.qunar.com/new/#/download)
+
 可以在二维码生成网站[http://www.liantu.com/](http://www.liantu.com/)生成导航地址的二维码，然后通过扫码在手机客户端添加导航
 
 ## 配置文件修改

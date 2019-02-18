@@ -1,26 +1,3 @@
-## 注意事项
-以下文档请务必仔细阅读和参照执行，否则可能会创建失败
-
-强调几点：
-* 切勿使用root账号进行如下操作，很多软件会检查当前用户名称，so请新建用户来进行操作;
-* redis 启动需要加载配置
-* 对startalk来说，配置中的domain 非常重要，请务必仔细配置，保持一致。
-* 在开始之前请务必保证以下几个端口没有被占用：
-```
-openresty服务：8080
-im_http_service服务：8005 8009 8081
-qfproxy服务：8006 8010 8082
-push_service服务：8007 8011 8083
-qtalk_search服务：8888
-qtalk_cowboy_server服务：10056
-
-im服务： 5222 5201 5202 
-
-db: 5432 
-
-redis: 6379
-```
-
 
 
 # Startalk EJABBERD
@@ -75,11 +52,34 @@ IM数据库服务
 
 ![architecture](image/arch.png)
 
+## 注意事项
+以下文档请务必仔细阅读和参照执行，否则可能会创建失败
+
+强调几点：
+* 切勿使用root账号进行如下操作，很多软件会检查当前用户名称，so请新建用户来进行操作;
+* redis 启动需要加载配置
+* 对startalk来说，配置中的domain 非常重要，请务必仔细配置，保持一致。
+* 在开始之前请务必保证以下几个端口没有被占用：
+```
+openresty服务：8080
+im_http_service服务：8005 8009 8081
+qfproxy服务：8006 8010 8082
+push_service服务：8007 8011 8083
+qtalk_search服务：8888
+qtalk_cowboy_server服务：10056
+
+im服务： 5222 5201 5202 
+
+db: 5432 
+
+redis: 6379
+```
+
 ## 安装
 
 前提条件(如果主机名，用户名和这里的不一致，则需要将安装步骤中的换成自己的名字)：
 
-+ 服务器要求：centos7
++ 服务器要求：centos7.*
 + 主机名是：startalk.com
 + hosts添加： 127.0.0.1 startalk.com(sudo vim /etc/hosts)
 + 所有项目都安装到/startalk下面
@@ -91,7 +91,8 @@ IM数据库服务
 + 保证可访问主机的：5222、5202、8080端口（关掉防火墙：sudo systemctl stop firewalld.service）
 + IM服务的域名是:qtalk.test.org
 + tls证书：默认安装用的是一个测试证书，线上使用，请更换/startalk/ejabberd/etc/ejabberd/server.pem文件，生成方法见[securing-ejabberd-with-tls-encryption](https://blog.process-one.net/securing-ejabberd-with-tls-encryption/)
-+ 出现文件覆盖提示是，输入yes敲回车即可
++ 出现文件覆盖提示时，输入yes敲回车即可
++ 安装文档中#开头输入的命令表示root执行的，$开头的命令表示普通用户
 
 ```
 依赖包
@@ -99,6 +100,12 @@ IM数据库服务
 # yum -y update
 # yum -y groupinstall Base "Development Tools" "Perl Support"
 # yum -y install openssl openssl-devel unixODBC unixODBC-devel pkgconfig libSM libSM-devel libxslt ncurses-devel libyaml libyaml-devel expat expat-devel libxml2-devel libxml2 java-1.8.0-openjdk  java-1.8.0-openjdk-devel  pam-devel pcre-devel gd-devel bzip2-devel zlib-devel libicu-devel libwebp-devel gmp-devel curl-devel postgresql-devel libtidy libtidy-devel recode aspell libmcrypt  libmemcached gd readline-devel libxslt-devel vim
+
+添加host
+
+# vim /ets/hosts
+添加下面一行
+127.0.0.1 startalk.com
 
 新建安装用户
 # groupadd startalk
@@ -126,6 +133,10 @@ $ git clone https://github.com/qunarcorp/qtalk_cowboy_open.git
 
 $ cp ejabberd-open/doc/qtalk.sql /startalk/
 $ chmod 777 /startalk/qtalk.sql
+
+检测端口使用：
+# sudo netstat -antlp | egrep "8080|8005|8009|8081|8006|8010|8082|8007|8011|8083|8888|10056|5222|5201|5202|5280|6379"
+若没有任何输出，怎表明没有程序占用startalk使用的端口，否则需要关闭已经在使用端口的程序
 
 redis安装
 $ sudo yum install -y redis
@@ -215,6 +226,7 @@ ejabberd=# select * from host_users;
 (2 rows)
 
 openresty安装
+$ su - startalk
 $ cd /startalk/download
 $ wget https://openresty.org/download/openresty-1.13.6.2.tar.gz
 $ tar -zxvf openresty-1.13.6.2.tar.gz
@@ -390,10 +402,11 @@ tcp6       0      0 :::8083                 :::*                    LISTEN      
 tcp6       0      0 127.0.0.1:8005          :::*                    LISTEN      23748/java          
 tcp6       0      0 127.0.0.1:8006          :::*                    LISTEN      23785/java 
 
-客户端配置导航地址：http://ip:8080/newapi/nck/qtalk_nav.qunar，使用账号：test，密码：testpassword登陆
+客户端配置导航地址：http://ip:8080/newapi/nck/qtalk_nav.qunar，使用账号：test，密码：testpassword登陆(将ip替换成自己服务器的ip)
 
 ```
 
+到此，服务端已经安装完成，请下载[startalk客户端](https://im.qunar.com/new/#/download)
 可以在二维码生成网站[http://www.liantu.com/](http://www.liantu.com/)生成导航地址的二维码，然后通过扫码在手机客户端添加导航
 
 ## 配置文件修改

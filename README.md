@@ -26,7 +26,7 @@ IM核心组件，负责维持与客户端的长连接和消息路由
 IM负载均衡组件，负责验证客户端身份，以及转发http请求到对应的后台服务
 + [im_http_service](https://github.com/qunarcorp/im_http_service_open)
 
-IM HTTP接口服务，负责IM相关数据的查询、设置以及历史消息同步
+IM HTTP接口服务，负责IM相关数据的查询、设置以及历史消息同步(基于tomcat的java服务)
 
 + [qtalk_cowboy](https://github.com/qunarcorp/qtalk_cowboy_open)(后面所有的接口都会迁移到im_http_service，这个服务会废弃)
 
@@ -34,7 +34,11 @@ IM HTTP接口服务，负责IM相关数据的查询、设置以及历史消息�
 
 + [qfproxy](https://github.com/qunarcorp/qfproxy_open)
 
-IM文件服务，负责文件的上传和下载
+IM文件服务，负责文件的上传和下载(基于tomcat的java服务)
+
++ [push_service](https://github.com/qunarcorp/push_service_open)
+
+IM的push服务，用于离线消息的推送(基于tomcat的java服务)
 
 + [qtalk_serach](https://github.com/qunarcorp/qtalk_search)
 
@@ -326,7 +330,7 @@ $ ./bin/ejb_http_server stop
 $ ps -ef | grep ejb_http_server
 startalk 23644     1  4 10:01 ?        00:00:00 /home/work/erlang1903/lib/erlang/erts-8.3/bin/beam.smp -- -root /home/work/erlang1903/lib/erlang -progname erl -- -home /home/startalk -- -name ejb_http_server@startalk.com -noshell -noinput -pa ./ebin -pa ./deps/cowboy/ebin ./deps/cowlib/ebin ./deps/eredis/ebin ./deps/goldrush/ebin ./deps/lager/ebin ./deps/p1_pgsql/ebin ./deps/ranch/ebin ./deps/recon/ebin ./deps/rfc4627_jsonrpc/ebin -s ejb_http_server -smp enable -hidden -config ./config/lager -config ./config/ejb_http_server
 
-安装java服务
+安装java服务(/startalk/download/or_open/deps/tomcat/下的是打好包的三个java服务，自己也可以使用源码打包，然后自己部署)
 $ cd /startalk/download/
 $ cp -rf or_open/deps/tomcat /startalk/
 $ cd /startalk/tomcat

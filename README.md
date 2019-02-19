@@ -362,15 +362,6 @@ $  vim /startalk/tomcat/im_http_service/webapps/im_http_service/WEB-INF/classes/
 -
 将ip替换成对应机器的ip地址
 
-
-修改文件服务器配置
-
-$ vim /startalk/tomcat/qfproxy/webapps/qfproxy/WEB-INF/classes/qfproxy.properties
-
-project.host.and.port=http://ip:8080
-
-将ip替换成对应机器的ip地址
-
 修改推送服务的地址
 
 $ vim /startalk/tomcat/push_service/webapps/push_service/WEB-INF/classes/app.properties

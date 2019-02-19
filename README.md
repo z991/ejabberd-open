@@ -72,7 +72,7 @@ push_service服务：8007 8011 8083
 qtalk_search服务：8888
 qtalk_cowboy_server服务：10056
 
-im服务： 5222 5201 5202 
+im服务： 5222 5202 
 
 db: 5432 
 
@@ -144,7 +144,7 @@ $ cp ejabberd-open/doc/qtalk.sql /startalk/
 $ chmod 777 /startalk/qtalk.sql
 
 检测端口使用：
-# sudo netstat -antlp | egrep "8080|8005|8009|8081|8006|8010|8082|8007|8011|8083|8888|10056|5222|5201|5202|5280|6379"
+# sudo netstat -antlp | egrep "8080|8005|8009|8081|8006|8010|8082|8007|8011|8083|8888|10056|5222|5202|5280|6379"
 若没有任何输出，怎表明没有程序占用startalk使用的端口，否则需要关闭已经在使用端口的程序
 
 redis安装

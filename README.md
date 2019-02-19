@@ -244,20 +244,8 @@ $ cd /startalk/download/or_open
 $ cp -rf conf /startalk/openresty/nginx
 $ cp -rf lua_app /startalk/openresty/nginx
 
-or配置文件(默认不需要修改)
-
-location的配置
-/startalk/openresty/nginx/conf/conf.d/subconf/or.server.location.package.qtapi.conf
-
-upstream的配置
-/startalk/openresty/nginx/conf/conf.d/upstreams/qt.qunar.com.upstream.conf
-
-redis连接地址配置
-/startalk/openresty/nginx/lua_app/checks/qim/qtalkredis.lua
-
 or操作
 启动：/startalk/openresty/nginx/sbin/nginx
-停止：/startalk/openresty/nginx/sbin/nginx -s stop
 
 确认启动成功
 $ sudo netstat -antlp | grep 8080

@@ -28,6 +28,7 @@ check_user_password(Host, User, Password) ->
                         NewKey = qtalk_public:concat(User,<<"@">>,Host),
                         catch set_user_mac_key(Host,NewKey,Key)
                     end,
+                    ?INFO_MSG("the auth info: ~p~n", [{Password1,Pass, Salt}]),
                     do_check_host_user(Password1,Pass, Salt);
                _ -> false
            end;

@@ -14,7 +14,7 @@
 
 ## 0.概述
 
-HTTP服务是通过cowboy组件来实现的，启动模块是[http_service.erl](../src/http_service.erl)。
+HTTP服务是通过cowboy组件来实现的，启动模块是[http_service.erl](../src/http_service.erl)，服务端口是10050。
 
 ## 1.发送消息
 

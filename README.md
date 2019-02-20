@@ -83,7 +83,7 @@ redis: 6379
 
 前提条件(如果主机名，用户名和这里的不一致，则需要将安装步骤中的换成自己的名字)：
 
-+ 服务器要求：centos7.*
++ 服务器要求：centos7.x
 + 主机名是：startalk.com
 + hosts添加： 127.0.0.1 startalk.com(sudo vim /etc/hosts)
 + 所有项目都安装到/startalk下面
@@ -98,20 +98,25 @@ redis: 6379
 + 出现文件覆盖提示时，输入yes敲回车即可
 + 安装文档中#开头输入的命令表示root执行的，$开头的命令表示普通用户
 
+### 依赖包
 ```
-依赖包
 # yum install epel-release
 # yum -y update
 # yum -y groupinstall Base "Development Tools" "Perl Support"
 # yum -y install openssl openssl-devel unixODBC unixODBC-devel pkgconfig libSM libSM-devel libxslt ncurses-devel libyaml libyaml-devel expat expat-devel libxml2-devel libxml2 java-1.8.0-openjdk  java-1.8.0-openjdk-devel  pam-devel pcre-devel gd-devel bzip2-devel zlib-devel libicu-devel libwebp-devel gmp-devel curl-devel postgresql-devel libtidy libtidy-devel recode aspell libmcrypt  libmemcached gd readline-devel libxslt-devel vim
+```
 
-添加host
+### 添加host
 
+```
 # vim /ets/hosts
 添加下面一行
 127.0.0.1 startalk.com
+```
 
-新建安装用户
+### 新建安装用户
+
+```
 # groupadd startalk
 # useradd -g startalk startalk
 # passwd startalk
@@ -119,20 +124,29 @@ redis: 6379
 # groupadd postgres
 # useradd -g postgres postgres
 # passwd postgres  
+```
 
-新建安装目录
+### 新建安装目录
+
+```
 # mkdir /startalk
 # chown startalk:startalk /startalk
+```
 
-为startalk用户添加sudo权限
+### 为startalk用户添加sudo权限
+
+```
 # visudo 
 
 在行(root    ALL= (ALL)    ALL)行后添加
 (startalk     ALL= (ALL)    ALL)
 (postgres     ALL= (ALL)    ALL)
 保存后退出
+```
 
-下载源码
+### 下载源码
+
+```
 # su - startalk
 $ mkdir /startalk/download
 $ cd /startalk/download
@@ -142,12 +156,18 @@ $ git clone https://github.com/qunarcorp/qtalk_cowboy_open.git
 
 $ cp ejabberd-open/doc/qtalk.sql /startalk/
 $ chmod 777 /startalk/qtalk.sql
+```
 
-检测端口使用：
+### 检测端口使用：
+
+```
 # sudo netstat -antlp | egrep "8080|8005|8009|8081|8006|8010|8082|8007|8011|8083|8888|10056|5222|5202|10050|5280|6379"
 若没有任何输出，怎表明没有程序占用startalk使用的端口，否则需要关闭已经在使用端口的程序
+```
 
-redis安装
+### redis安装
+
+```
 $ sudo yum install -y redis
 $ sudo vim /etc/redis.conf
 将对应的配置修改为下面内容 
@@ -161,8 +181,11 @@ $ sudo redis-server /etc/redis.conf
 确认启动成功：
 $ sudo netstat -antlp | grep 6379
 tcp        0      0 127.0.0.1:6379          0.0.0.0:*               LISTEN      8813/redis-server 1
+```
 
-数据库安装
+### 数据库安装
+
+```
 １ 下载源代码
 $ wget https://ftp.postgresql.org/pub/source/v11.1/postgresql-11.1.tar.gz
  
@@ -228,8 +251,11 @@ ejabberd=# select * from host_users;
   1 |       1 | test          | 测试账号     | /机器人       |     |       | 机器人       |      |      |      |      | test          |           0 |       1 | U         |         1 |      1 | 1234567890                       |          1 | qtalk
   2 |       1 | file-transfer | 文件传输助手 | /智能服务助手 |     |       | 智能服务助手 |      |      |      |      | file-transfer |           1 |       1 | U         |         1 |      1 | 15f15057f5be45c6bb6522d08078e0d4 |          1 | qtalk
 (2 rows)
+```
 
-openresty安装
+### openresty安装
+
+```
 $ su - startalk
 $ cd /startalk/download
 $ wget https://openresty.org/download/openresty-1.13.6.2.tar.gz
@@ -250,8 +276,11 @@ or操作
 确认启动成功
 $ sudo netstat -antlp | grep 8080
 tcp        0      0 0.0.0.0:8080            0.0.0.0:*               LISTEN      23438/nginx: master
+```
 
-安装erlang
+### 安装erlang
+
+```
 $ cd /startalk/download
 $ wget http://erlang.org/download/otp_src_19.3.tar.gz
 $ tar -zxvf otp_src_19.3.tar.gz
@@ -277,9 +306,11 @@ Erlang/OTP 19 [erts-8.3] [source] [64-bit] [smp:4:4] [async-threads:10] [hipe] [
 
 Eshell V8.3  (abort with ^G)
 1> 
+```
 
+### 安装ejabberd
 
-安装ejabberd
+```
 $ cd /startalk/download
 $ cd ejabberd-open/
 $ ./configure --prefix=/startalk/ejabberd --with-erlang=/startalk/erlang1903 --enable-pgsql --enable-full-xml
@@ -296,14 +327,15 @@ ejabberd配置
 $ cd /startalk/ejabberd
 启动
 $ ./sbin/ejabberdctl start
-停止
-$ ./sbin/ejabberdctl stop
 
 确认ejabberd安装成功
 $ ps -ef | grep 's ejabberd'
 startalk 23515     1  4 09:58 ?        00:00:03 /startalk/erlang1903/lib/erlang/erts-8.3/bin/beam.smp -K true -P 250000 -- -root /startalk/erlang1903/lib/erlang -progname erl -- -home /home/startalk -- -name ejabberd@startalk.com -noshell -noinput -noshell -noinput -mnesia dir "/startalk/ejabberd/var/lib/ejabberd" -ejabberd log_rate_limit 20000 log_rotate_size 504857600 log_rotate_count 41 log_rotate_date "$D0" -s ejabberd -smp auto start
+```
 
-安装qtalk_cowboy
+### 安装qtalk_cowboy
+
+```
 $ cd /startalk/download
 $ cp -rf qtalk_cowboy_open /startalk/qtalk_cowboy
 $ cd /startalk/qtalk_cowboy/
@@ -317,8 +349,11 @@ $ ./bin/ejb_http_server stop
 确认qtalk_cowboy服务启动成功
 $ ps -ef | grep ejb_http_server
 startalk 23644     1  4 10:01 ?        00:00:00 /home/work/erlang1903/lib/erlang/erts-8.3/bin/beam.smp -- -root /home/work/erlang1903/lib/erlang -progname erl -- -home /home/startalk -- -name ejb_http_server@startalk.com -noshell -noinput -pa ./ebin -pa ./deps/cowboy/ebin ./deps/cowlib/ebin ./deps/eredis/ebin ./deps/goldrush/ebin ./deps/lager/ebin ./deps/p1_pgsql/ebin ./deps/ranch/ebin ./deps/recon/ebin ./deps/rfc4627_jsonrpc/ebin -s ejb_http_server -smp enable -hidden -config ./config/lager -config ./config/ejb_http_server
+```
 
-安装java服务(/startalk/download/or_open/deps/tomcat/下的是打好包的三个java服务，自己也可以使用源码打包，然后自己部署)
+### 安装java服务(/startalk/download/or_open/deps/tomcat/下的是打好包的三个java服务，自己也可以使用源码打包，然后自己部署)
+
+```
 $ cd /startalk/download/
 $ cp -rf or_open/deps/tomcat /startalk/
 $ cd /startalk/tomcat
@@ -384,10 +419,9 @@ tcp6       0      0 :::8082                 :::*                    LISTEN      
 tcp6       0      0 :::8083                 :::*                    LISTEN      23853/java          
 tcp6       0      0 127.0.0.1:8005          :::*                    LISTEN      23748/java          
 tcp6       0      0 127.0.0.1:8006          :::*                    LISTEN      23785/java 
+```
 
 客户端配置导航地址：http://ip:8080/newapi/nck/qtalk_nav.qunar，使用账号：test，密码：testpassword登陆(将ip替换成自己服务器的ip)
-
-```
 
 到此，服务端已经安装完成，请下载[startalk客户端](https://im.qunar.com/new/#/download)
 

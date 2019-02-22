@@ -6,14 +6,14 @@
 -include("jlib.hrl").
 
 handle(Req) ->
-    {Method, Req1} = cowboy_req:method(Req),
+    Method = cowboy_req:method(Req),
     case Method of
-        <<"POST">> -> send_message(Req1);
-        _ -> http_utils:cowboy_req_reply_json(http_utils:gen_fail_result(1, <<Method/binary, " is not disable">>), Req1)
+        <<"POST">> -> send_message(Req);
+        _ -> http_utils:cowboy_req_reply_json(http_utils:gen_fail_result(1, <<Method/binary, " is not disable">>), Req)
     end.
 
 send_message(Req)->
-    {ok, Body, Req1} = cowboy_req:body(Req),
+    {ok, Body, Req1} = http_utils:read_body(Req),
     case rfc4627:decode(Body) of
         {ok, {obj,Args},[]} ->
             Res = http_send_message(Args),

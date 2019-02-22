@@ -5,14 +5,14 @@
 -include("logger.hrl").
 
 handle(Req) ->
-    {Method, Req1} = cowboy_req:method(Req),
+    Method = cowboy_req:method(Req),
     case Method of 
-        <<"POST">> -> do_handle(Req1);
-        _ -> http_utils:cowboy_req_reply_json(http_utils:gen_fail_result(1, <<Method/binary, " is not disable">>), Req1)
+        <<"POST">> -> do_handle(Req);
+        _ -> http_utils:cowboy_req_reply_json(http_utils:gen_fail_result(1, <<Method/binary, " is not disable">>), Req)
     end.
 
 do_handle(Req)->
-    {ok, Body, Req1} = cowboy_req:body(Req),
+    {ok, Body, Req1} = http_utils:read_body(Req),
     case rfc4627:decode(Body) of
     {ok,{obj,Args},[]}  ->
         Res = del_muc_users(Args),

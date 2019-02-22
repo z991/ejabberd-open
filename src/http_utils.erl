@@ -17,6 +17,7 @@
          do_verify_user_key/3,
          to_integer/2,
          to_binary/2,
+         read_body/2,
          to_integer/1
         ]).
 
@@ -77,7 +78,7 @@ gen_fail_result(Code, Reason, Content) ->
     gen_result(false, Code, Reason, Content).
 
 cowboy_req_reply_json(Data, Req) ->
-    cowboy_req:reply(200, [{<<"content-type">>, <<"application/json; charset=utf-8">>}], Data, Req).
+    cowboy_req:reply(200, #{<<"content-type">> => <<"application/json; charset=utf-8">>}, Data, Req).
 
 check_version(Req) ->
 	{Version,_} = cowboy_req:qs_val(<<"v">>, Req),
@@ -179,3 +180,9 @@ to_binary(V,_Default) when is_binary(V) ->
     V;
 to_binary(_,Default) ->
 	Default.
+
+read_body(Req0, Acc) ->
+    case cowboy_req:read_body(Req0) of
+        {ok, Data, Req} -> {ok, << Acc/binary, Data/binary >>, Req};
+        {more, Data, Req} -> read_body(Req, << Acc/binary, Data/binary >>)
+    end.

@@ -8,16 +8,17 @@
 -record(muc_online_room, {name_host = {<<"">>, <<"">>} :: {binary(), binary()} | '$1' |{'_', binary()} | '_', pid = self() :: pid() | '$2' | '_' | '$1'}).
 
 handle(Req) ->
-    {Method, Req1} = cowboy_req:method(Req),
+    Method = cowboy_req:method(Req),
     case Method of 
-        <<"POST">> -> http_utils:cowboy_req_reply_json(http_utils:gen_fail_result(1, <<Method/binary, " is not disable">>), Req1);
-        _ -> do_handle(Req1)
+        <<"POST">> -> http_utils:cowboy_req_reply_json(http_utils:gen_fail_result(1, <<Method/binary, " is not disable">>), Req);
+        _ -> do_handle(Req)
     end.
 
 do_handle(Req) ->
-    {MucName, Req1} = cowboy_req:qs_val(<<"muc_name">>, Req),
+    ParsedQs = cowboy_req:parse_qs(Req),
+    MucName = proplists:get_value(<<"muc_name">>, ParsedQs),
     Res = send_update_vcard_presence(MucName),
-    http_utils:cowboy_req_reply_json(Res, Req1).
+    http_utils:cowboy_req_reply_json(Res, Req).
 
 send_update_vcard_presence(Name) ->
     Servers = ejabberd_config:get_myhosts(),

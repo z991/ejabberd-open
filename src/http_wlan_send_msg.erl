@@ -1,7 +1,6 @@
 -module(http_wlan_send_msg).
 
--export([init/3]).
--export([handle/2]).
+-export([init/2]).
 -export([terminate/3]).
 -export([http_send_message/1]).
 
@@ -9,31 +8,29 @@
 -include("logger.hrl").
 -include("jlib.hrl").
 
-init(_Transport, Req, []) -> {ok, Req, undefined}.
-
-handle(Req, State) ->
-    {Method, Req1} = cowboy_req:method(Req),
+init(Req, State) ->
+    Method = cowboy_req:method(Req),
     case Method of 
         <<"POST">> ->
-            HasBody = cowboy_req:has_body(Req1),
-            {ok, Req2} = post_echo(Method, HasBody, Req1),
+            HasBody = cowboy_req:has_body(Req),
+            {ok, Req2} = post_echo(Method, HasBody, Req),
             {ok, Req2, State};
         _ ->
-            {ok,Req2} = echo(Req1),
+            {ok,Req2} = echo(Req),
             {ok, Req2, State}
     end.
     	
 post_echo(<<"POST">>, true, Req) ->
-    {ok, Body, Req1} = cowboy_req:body(Req),
+    {ok, Body, Req1} = http_utils:read_body(Req),
     case rfc4627:decode(Body) of
         {ok, {obj,Args},[]} -> 
             Res = http_send_message(Args),
-            cowboy_req:reply(200, [{<<"content-type">>, <<"text/json; charset=utf-8">>}], Res, Req1);
-        _ -> cowboy_req:reply(200, [{<<"content-type">>, <<"text/json; charset=utf-8">>}], <<"Josn parse error">>, Req1)
+            cowboy_req:reply(200, #{<<"content-type">> => <<"text/json; charset=utf-8">>}, Res, Req1);
+        _ -> cowboy_req:reply(200, #{<<"content-type">> => <<"text/json; charset=utf-8">>}, <<"Josn parse error">>, Req1)
     end;
 post_echo(_, _, Req) -> cowboy_req:reply(405, Req).
 
-echo(Req) -> cowboy_req:reply(400, [], <<"fail">>, Req).
+echo(Req) -> cowboy_req:reply(400, #{}, <<"fail">>, Req).
 
 terminate(_Reason, _Req, _State) -> ok.
 	

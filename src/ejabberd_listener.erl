@@ -387,7 +387,6 @@ start_listener2(Port, Module, Opts) ->
     %% It is only required to start the supervisor in some cases.
     %% But it doesn't hurt to attempt to start it for any listener.
     %% So, it's normal (and harmless) that in most cases this call returns: {error, {already_started, pid()}}
-    maybe_start_sip(Module),
     start_module_sup(Port, Module),
     start_listener_sup(Port, Module, Opts).
 

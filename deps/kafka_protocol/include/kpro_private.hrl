@@ -20,6 +20,11 @@
 
 -include("kpro.hrl").
 
+-define(no_compression, no_compression).
+-define(gzip, gzip).
+-define(snappy, snappy).
+-define(lz4, lz4).
+
 %% Compression attributes
 -define(KPRO_COMPRESS_NONE,   0).
 -define(KPRO_COMPRESS_GZIP,   1).
@@ -34,6 +39,9 @@
 -define(KPRO_IS_LZ4_ATTR(ATTR),
         ((?KPRO_COMPRESSION_MASK band ATTR) =:= ?KPRO_COMPRESS_LZ4)).
 
+-define(KPRO_TS_TYPE_CREATE, 0).
+-define(KPRO_TS_TYPE_APPEND, 2#1000).
+
 -define(KPRO_TS_TYPE_MASK, 2#1000).
 -define(KPRO_IS_CREATE_TS(ATTR), ((?KPRO_TS_TYPE_MASK band ATTR) =:= 0)).
 -define(KPRO_IS_APPEND_TS(ATTR), ((?KPRO_TS_TYPE_MASK band ATTR) =/= 0)).
@@ -41,18 +49,8 @@
 %% some pre-defined default values
 -define(KPRO_REPLICA_ID, -1).
 -define(KPRO_API_VERSION, 0).
--define(KPRO_MAGIC_BYTE, 0).
--define(KPRO_ATTRIBUTES, ?KPRO_COMPRESS_NONE).
-
-%% correlation IDs are 32 bit signed integers.
-%% we use 24 bits only, and use the highest 5 bits to be redudant with API key
-%% and next 3 bits with API version
-%% so that the decoder may decode the responses without the need of an extra
-%% correlation ID to API key association.
--define(API_KEY_BITS, 5).
--define(API_VERSION_BITS, 3).
--define(CORR_ID_BITS, (32 - (?API_KEY_BITS + ?API_VERSION_BITS))).
--define(MAX_CORR_ID, ((1 bsl ?CORR_ID_BITS) - 1)).
+-define(KPRO_MAGIC_0, 0).
+-define(KPRO_MAGIC_1, 1).
 
 -define(IS_KAFKA_PRIMITIVE(T),
         (T =:= boolean orelse T =:= int8 orelse T =:= int16 orelse
@@ -60,55 +58,59 @@
          T =:= string orelse T =:= nullable_string orelse
          T =:= bytes orelse T =:= records)).
 
--define(REQ_TO_API_KEY(Req),
-        case Req of
-          produce_request             ->  0;
-          fetch_request               ->  1;
-          offsets_request             ->  2;
-          metadata_request            ->  3;
-          leader_and_isr_request      ->  4;
-          stop_replica_request        ->  5;
-          update_metadata_request     ->  6;
-          offset_commit_request       ->  8;
-          offset_fetch_request        ->  9;
-          group_coordinator_request   -> 10;
-          join_group_request          -> 11;
-          heartbeat_request           -> 12;
-          leave_group_request         -> 13;
-          sync_group_request          -> 14;
-          describe_groups_request     -> 15;
-          list_groups_request         -> 16;
-          sasl_handshake_request      -> 17;
-          api_versions_request        -> 18;
-          create_topics_request       -> 19;
-          delete_topics_request       -> 20
-        end).
-
--define(API_KEY_TO_RSP(ApiKey),
-        case ApiKey of
-           0 -> produce_response;
-           1 -> fetch_response;
-           2 -> offsets_response;
-           3 -> metadata_response;
-           4 -> leader_and_isr_response;
-           5 -> stop_replica_response;
-           6 -> update_metadata_response;
-           8 -> offset_commit_response;
-           9 -> offset_fetch_response;
-          10 -> group_coordinator_response;
-          11 -> join_group_response;
-          12 -> heartbeat_response;
-          13 -> leave_group_response;
-          14 -> sync_group_response;
-          15 -> describe_groups_response;
-          16 -> list_groups_response;
-          17 -> sasl_handshake_response;
-          18 -> api_versions_response;
-          19 -> create_topics_response;
-          20 -> delete_topics_response
-        end).
-
 -define(null, ?kpro_null).
+
+-define(INT, signed-integer).
+
+-define(ISOLATION_LEVEL_ATOM(I),
+        case I of
+          0 -> ?kpro_read_uncommitted;
+          1 -> ?kpro_read_committed
+        end).
+
+-define(ISOLATION_LEVEL_INTEGER(I),
+        case I of
+          ?kpro_read_uncommitted -> 0;
+          ?kpro_read_committed   -> 1
+        end).
+
+
+-define(SCHEMA_MODULE, kpro_schema).
+
+-define(IS_STRUCT(S), (is_list(S) orelse is_map(S))).
+
+-define(MIN_MAGIC_2_PRODUCE_API_VSN, 3). %% since kafka 0.11
+-define(MIN_MAGIC_2_FETCH_API_VSN, 4). %% since kafka 0.11
+-define(MIN_INCREMENTAL_FETCH_API_VSN, 7). %% since kafka 1.1.0
+
+%% SASL auth mechanisms
+-define(plain, plain).
+-define(scram_sha_256, scram_sha_256).
+-define(scram_sha_512, scram_sha_512).
+-define(IS_SCRAM(Mechanism), (Mechanism =:= ?scram_sha_256 orelse
+                              Mechanism =:= ?scram_sha_512)).
+-define(IS_PLAIN_OR_SCRAM(Mechanism), (Mechanism =:= ?plain orelse
+                                       ?IS_SCRAM(Mechanism))).
+
+-define(KAFKA_0_9,   9).
+-define(KAFKA_0_10, 10).
+-define(KAFKA_0_11, 11).
+-define(KAFKA_1_0, 100).
+-define(KAFKA_1_1, 110).
+
+-ifdef(OTP_RELEASE).
+-define(BIND_STACKTRACE(Var), :Var).
+-define(GET_STACKTRACE(Var), ok).
+-else.
+-define(BIND_STACKTRACE(Var),).
+-define(GET_STACKTRACE(Var), Var = erlang:get_stacktrace()).
+-endif.
+
+-ifndef(OLD_TIME_UNITS).
+-define(millisecond, millisecond).
+-else.
+-define(millisecond, milli_seconds).
+-endif.
 
 -endif.
 

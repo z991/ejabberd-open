@@ -1,4 +1,4 @@
-%% Copyright (c) 2014, Loïc Hoguin <essen@ninenines.eu>
+%% Copyright (c) 2014-2017, Loïc Hoguin <essen@ninenines.eu>
 %%
 %% Permission to use, copy, modify, and/or distribute this software for any
 %% purpose with or without fee is hereby granted, provided that the above
@@ -17,7 +17,7 @@
 -export([init/2]).
 
 init(_, _) ->
-	cowboy_test:start([cowboy, gun]),
-	cowboy_test:make_certs(),
-	error_logger:add_report_handler(cowboy_error_h),
+	ct_helper:start([cowboy, gun]),
+	ct_helper:make_certs_in_ets(),
+	error_logger:add_report_handler(ct_helper_error_h),
 	{ok, undefined}.

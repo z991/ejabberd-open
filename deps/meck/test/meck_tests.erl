@@ -1,5 +1,5 @@
 %%=============================================================================
-%% Copyright 2010 Erlang Solutions Ltd.
+%% Copyright 2010-2017 Adam Lindberg, 2010-2011 Erlang Solutions Ltd
 %%
 %% Licensed under the Apache License, Version 2.0 (the "License");
 %% you may not use this file except in compliance with the License.
@@ -16,11 +16,7 @@
 
 -module(meck_tests).
 
--compile(export_all).
-
 -include_lib("eunit/include/eunit.hrl").
--include_lib("hamcrest/include/hamcrest.hrl").
-
 
 -define(assertTerminated(MonitorRef, Reason, Timeout),
         (fun() ->
@@ -37,84 +33,86 @@
 
 meck_test_() ->
     {foreach, fun setup/0, fun teardown/1,
-     [{with, [T]} || T <- [fun ?MODULE:new_/1,
-                           fun ?MODULE:unload_/1,
-                           fun ?MODULE:double_new_/1,
-                           fun ?MODULE:validate_/1,
-                           fun ?MODULE:expect_/1,
-                           fun ?MODULE:exports_/1,
-                           fun ?MODULE:call_return_value_/1,
-                           fun ?MODULE:call_return_value_improper_list_/1,
-                           fun ?MODULE:call_argument_/1,
-                           fun ?MODULE:call_undef_/1,
-                           fun ?MODULE:call_function_clause_/1,
-                           fun ?MODULE:validate_unexpected_error_/1,
-                           fun ?MODULE:validate_expected_error_/1,
-                           fun ?MODULE:validate_chained_/1,
-                           fun ?MODULE:stacktrace_/1,
-                           fun ?MODULE:stacktrace_function_clause_/1,
-                           fun ?MODULE:change_func_/1,
-                           fun ?MODULE:caller_does_not_crash_on_reload_/1,
-                           fun ?MODULE:call_original_undef_/1,
-                           fun ?MODULE:history_empty_/1,
-                           fun ?MODULE:history_call_/1,
-                           fun ?MODULE:history_throw_/1,
-                           fun ?MODULE:history_throw_fun_/1,
-                           fun ?MODULE:history_exit_/1,
-                           fun ?MODULE:history_error_/1,
-                           fun ?MODULE:history_error_args_/1,
-                           fun ?MODULE:history_meck_throw_/1,
-                           fun ?MODULE:history_meck_throw_fun_/1,
-                           fun ?MODULE:history_meck_exit_/1,
-                           fun ?MODULE:history_meck_error_/1,
-                           fun ?MODULE:history_by_pid_/1,
-                           fun ?MODULE:reset_/1,
-                           fun ?MODULE:shortcut_expect_/1,
-                           fun ?MODULE:shortcut_expect_negative_arity_/1,
-                           fun ?MODULE:shortcut_call_return_value_/1,
-                           fun ?MODULE:shortcut_call_argument_/1,
-                           fun ?MODULE:shortcut_re_add_/1,
-                           fun ?MODULE:shortcut_opaque_/1,
-                           fun ?MODULE:delete_/1,
-                           fun ?MODULE:called_false_no_args_/1,
-                           fun ?MODULE:called_true_no_args_/1,
-                           fun ?MODULE:called_true_two_functions_/1,
-                           fun ?MODULE:called_false_one_arg_/1,
-                           fun ?MODULE:called_true_one_arg_/1,
-                           fun ?MODULE:called_false_few_args_/1,
-                           fun ?MODULE:called_true_few_args_/1,
-                           fun ?MODULE:called_few_args_matchers_/1,
-                           fun ?MODULE:called_false_error_/1,
-                           fun ?MODULE:called_true_error_/1,
-                           fun ?MODULE:called_with_pid_no_args_/1,
-                           fun ?MODULE:num_calls_/1,
-                           fun ?MODULE:num_calls_error_/1,
-                           fun ?MODULE:num_calls_with_pid_no_args_/1,
-                           fun ?MODULE:called_wildcard_/1,
-                           fun ?MODULE:sequence_/1,
-                           fun ?MODULE:expect_args_sequence_/1,
-                           fun ?MODULE:expect_arity_sequence_/1,
-                           fun ?MODULE:expect_complex_sequence_/1,
-                           fun ?MODULE:sequence_multi_/1,
-                           fun ?MODULE:loop_/1,
-                           fun ?MODULE:expect_empty_clause_list_/1,
-                           fun ?MODULE:expect_args_value_/1,
-                           fun ?MODULE:expect_args_invalid_call_/1,
-                           fun ?MODULE:expect_arity_value_/1,
-                           fun ?MODULE:expect_args_loop_/1,
-                           fun ?MODULE:expect_arity_loop_/1,
-                           fun ?MODULE:expect_complex_loop_/1,
-                           fun ?MODULE:expect_loop_in_seq_/1,
-                           fun ?MODULE:expect_args_exception_/1,
-                           fun ?MODULE:expect_arity_exception_/1,
-                           fun ?MODULE:expect_arity_clause_/1,
-                           fun ?MODULE:loop_multi_/1,
-                           fun ?MODULE:expect_args_pattern_override_/1,
-                           fun ?MODULE:expect_args_pattern_shadow_/1,
-                           fun ?MODULE:expect_args_pattern_missing_/1,
-                           fun ?MODULE:expect_args_pattern_invalid_/1,
-                           fun ?MODULE:expect_args_matchers_/1,
-                           fun ?MODULE:expect_ret_specs_/1
+     [{with, [T]} || T <- [fun new_/1,
+                           fun unload_/1,
+                           fun double_new_/1,
+                           fun validate_/1,
+                           fun expect_/1,
+                           fun exports_/1,
+                           fun call_return_value_/1,
+                           fun call_return_value_improper_list_/1,
+                           fun call_argument_/1,
+                           fun call_undef_/1,
+                           fun call_function_clause_/1,
+                           fun validate_unexpected_error_/1,
+                           fun validate_expected_error_/1,
+                           fun validate_chained_/1,
+                           fun stacktrace_/1,
+                           fun stacktrace_function_clause_/1,
+                           fun change_func_/1,
+                           fun caller_does_not_crash_on_reload_/1,
+                           fun call_original_undef_/1,
+                           fun history_empty_/1,
+                           fun history_call_/1,
+                           fun history_throw_/1,
+                           fun history_throw_fun_/1,
+                           fun history_exit_/1,
+                           fun history_error_/1,
+                           fun history_error_args_/1,
+                           fun history_meck_throw_/1,
+                           fun history_meck_throw_fun_/1,
+                           fun history_meck_exit_/1,
+                           fun history_meck_error_/1,
+                           fun history_by_pid_/1,
+                           fun reset_/1,
+                           fun shortcut_expect_/1,
+                           fun shortcut_expect_negative_arity_/1,
+                           fun shortcut_call_return_value_/1,
+                           fun shortcut_call_argument_/1,
+                           fun shortcut_re_add_/1,
+                           fun shortcut_opaque_/1,
+                           fun shortcut_stacktrace_/1,
+                           fun delete_/1,
+                           fun expects_/1,
+                           fun called_false_no_args_/1,
+                           fun called_true_no_args_/1,
+                           fun called_true_two_functions_/1,
+                           fun called_false_one_arg_/1,
+                           fun called_true_one_arg_/1,
+                           fun called_false_few_args_/1,
+                           fun called_true_few_args_/1,
+                           fun called_few_args_matchers_/1,
+                           fun called_false_error_/1,
+                           fun called_true_error_/1,
+                           fun called_with_pid_no_args_/1,
+                           fun num_calls_/1,
+                           fun num_calls_error_/1,
+                           fun num_calls_with_pid_no_args_/1,
+                           fun called_wildcard_/1,
+                           fun sequence_/1,
+                           fun expect_args_sequence_/1,
+                           fun expect_arity_sequence_/1,
+                           fun expect_complex_sequence_/1,
+                           fun sequence_multi_/1,
+                           fun loop_/1,
+                           fun expect_empty_clause_list_/1,
+                           fun expect_args_value_/1,
+                           fun expect_args_invalid_call_/1,
+                           fun expect_arity_value_/1,
+                           fun expect_args_loop_/1,
+                           fun expect_arity_loop_/1,
+                           fun expect_complex_loop_/1,
+                           fun expect_loop_in_seq_/1,
+                           fun expect_args_exception_/1,
+                           fun expect_arity_exception_/1,
+                           fun expect_arity_clause_/1,
+                           fun loop_multi_/1,
+                           fun expect_args_pattern_override_/1,
+                           fun expect_args_pattern_shadow_/1,
+                           fun expect_args_pattern_missing_/1,
+                           fun expect_args_pattern_invalid_/1,
+                           fun expect_args_matchers_/1,
+                           fun expect_ret_specs_/1
                           ]]}.
 
 setup() ->
@@ -396,11 +394,25 @@ shortcut_opaque_(Mod) ->
     ok = meck:expect(Mod, test, 0, {test, [a, self()], Ref}),
     ?assertMatch({test, [a, P], Ref} when P == self(), Mod:test()).
 
+shortcut_stacktrace_(Mod) ->
+    ok = meck:expect(Mod, test, [true], ok),
+    ?assertEqual(
+        {'EXIT', {function_clause, [{mymod, test, [false], []}]}},
+        catch(Mod:test(false))
+    ).
+
 delete_(Mod) ->
     ok = meck:expect(Mod, test, 2, ok),
     ?assertEqual(ok, meck:delete(Mod, test, 2)),
     ?assertError(undef, Mod:test(a, b)),
     ?assert(meck:validate(Mod)).
+
+expects_(Mod) ->
+    ?assertEqual([], meck:expects(Mod)),
+    ok = meck:expect(Mod, test, 2, ok),
+    ?assertEqual([{Mod, test, 2}], meck:expects(Mod)),
+    ok = meck:expect(Mod, test2, 0, ok),
+    ?assertEqual([{Mod, test, 2}, {Mod, test2, 0}], lists:sort(meck:expects(Mod))).
 
 called_false_no_args_(Mod) ->
     Args = [],
@@ -454,8 +466,8 @@ called_few_args_matchers_(Mod) ->
     Args = [one, 2, {three, 3}, "four"],
     ok = meck:expect(Mod, test, length(Args), ok),
     ok = apply(Mod, test, Args),
-    assert_called(Mod, test, ['_', meck:is(equal_to(2)), {'_', 3}, "four"], true),
-    assert_called(Mod, test, ['_', meck:is(equal_to(3)), {'_', 3}, "four"], false),
+    assert_called(Mod, test, ['_', meck:is(fun(X) -> X == 2 end), {'_', 3}, "four"], true),
+    assert_called(Mod, test, ['_', meck:is(fun(X) -> X == 3 end), {'_', 3}, "four"], false),
     ok.
 
 called_false_error_(Mod) ->
@@ -516,10 +528,6 @@ num_calls_with_pid_no_args_(Mod) ->
     ?assertEqual(1, meck:num_calls(Mod, test, Args, self())),
     ?assertEqual(meck:num_calls(Mod, test, Args, '_'),
                  meck:num_calls(Mod, test, Args)).
-
-expect_apply(Mod, Func, Args) ->
-    ok = meck:expect(Mod, Func, length(Args), ok),
-    ok = apply(Mod, Func, Args).
 
 expect_catch_apply(Mod, Func, Args) ->
     TestFun = fun (_, _, _) -> meck:exception(error, my_error) end,
@@ -776,7 +784,7 @@ expect_args_pattern_invalid_(Mod) ->
 expect_args_matchers_(Mod) ->
     %% When
     meck:expect(Mod, f, [{[1, meck:is(fun(X) -> X == 1 end)], a},
-                         {[1, meck:is(less_than(3))],         b},
+                         {[1, meck:is(fun(X) -> X < 3 end)],  b},
                          {['_', '_'],                         c}]),
     %% Then
     ?assertEqual(a, Mod:f(1, 1)),
@@ -802,6 +810,42 @@ expect_ret_specs_(Mod) ->
     ?assertEqual(c, Mod:f(1, 1)).
 
 %% --- Tests with own setup ----------------------------------------------------
+
+merge_expects_module_test() ->
+    Mod = merge_mod,
+    meck:new(Mod, [non_strict, merge_expects]),
+    %% Given
+    meck:expect(Mod, f, [2001], meck:raise(error, a)),
+    meck:expect(Mod, f, [2002], meck:raise(throw, b)),
+    meck:expect(Mod, f, [2003], meck:raise(exit, c)),
+    meck:expect(Mod, f, [2004], meck:val(d)),
+    %% When/Then
+    ?assertException(error, a, Mod:f(2001)),
+    ?assertException(throw, b, Mod:f(2002)),
+    ?assertException(exit, c, Mod:f(2003)),
+    ?assertMatch(d, Mod:f(2004)),
+    meck:unload(Mod).
+
+merge_expects_ret_specs_test() ->
+    Mod = merge_mod,
+    meck:new(Mod, [non_strict, merge_expects]),
+    %% When
+    meck:expect(Mod, f, [1, 1],   meck:seq([a, b, c])),
+    meck:expect(Mod, f, [1, '_'], meck:loop([d, e])),
+    meck:expect(Mod, f, ['_', '_'], meck:val(f)),
+    %% Then
+    ?assertEqual(d, Mod:f(1, 2)),
+    ?assertEqual(f, Mod:f(2, 2)),
+    ?assertEqual(e, Mod:f(1, 2)),
+    ?assertEqual(a, Mod:f(1, 1)),
+    ?assertEqual(d, Mod:f(1, 2)),
+    ?assertEqual(b, Mod:f(1, 1)),
+    ?assertEqual(c, Mod:f(1, 1)),
+    ?assertEqual(f, Mod:f(2, 2)),
+    ?assertEqual(c, Mod:f(1, 1)),
+    ?assertEqual(e, Mod:f(1, 2)),
+    ?assertEqual(c, Mod:f(1, 1)),
+    meck:unload(Mod).
 
 undefined_module_test() ->
     %% When/Then
@@ -851,6 +895,16 @@ original_has_no_object_code_test() ->
     ?assertEqual(ok, meck:new(meck_on_disk)),
     ok = file:delete("meck_on_disk.beam"),
     ok = meck:unload(meck_on_disk).
+
+passthrough_with_no_object_code_test() ->
+    {ok, Mod, Beam} = compile:forms([{attribute, 1, module, no_abstract_code}]),
+    ok = file:write_file("no_abstract_code.beam", Beam),
+    {module, Mod} = code:load_binary(Mod, "no_abstract_code.beam", Beam),
+    ?assertError(
+        {abstract_code_not_found, Mod},
+        meck:new(no_abstract_code, [passthrough, no_link])
+    ),
+    ok = file:delete("no_abstract_code.beam").
 
 passthrough_nonexisting_module_test() ->
     ok = meck:new(mymod, [passthrough, non_strict]),
@@ -914,7 +968,7 @@ stub_all_overridden_by_passthrough_test() ->
 
 mock_file_existing_test() ->
     %% Given
-    ExistingFile = atom_to_list(?MODULE) ++ ".erl",
+    ExistingFile = test_file(?MODULE, ".erl"),
     {ok, ExistsInfo} = file:read_file_info(ExistingFile),
     meck:new(file, [unstick, passthrough]),
     %% When
@@ -937,7 +991,7 @@ mock_file_missing_test() ->
     meck:unload(file).
 
 cover_test() ->
-    {ok, _} = cover:compile("../test/meck_test_module.erl"),
+    {ok, _} = cover:compile(test_file(meck_test_module, ".erl")),
     a = meck_test_module:a(),
     b = meck_test_module:b(),
     {1, 2} = meck_test_module:c(1, 2),
@@ -947,22 +1001,22 @@ cover_test() ->
 
 cover_options_test_() ->
     {foreach, fun compile_options_setup/0, fun compile_options_teardown/1,
-     [{with, [T]} || T <- [fun ?MODULE:cover_options_/1,
-                           fun ?MODULE:cover_options_fail_/1
+     [{with, [T]} || T <- [fun cover_options_/1,
+                           fun cover_options_fail_/1
                           ]]}.
 
 compile_options_setup() ->
     Module = cover_test_module,
     % Our test module won't compile without compiler options that
     % rebar won't give it, thus the rename dance.
-    Src = join("../test/", Module, ".erl"),
-    ok = file:rename(join("../test/", Module, ".dontcompile"), Src),
+    Src = test_file(Module, ".erl"),
+    ok = file:rename(test_file(Module, ".dontcompile"), Src),
     OldPath = code:get_path(),
-    code:add_path("../test"),
+    code:add_path(test_dir()),
     {OldPath, Src, Module}.
 
 compile_options_teardown({OldPath, Src, Module}) ->
-    file:rename(Src, join("../test/", Module, ".dontcompile")),
+    file:rename(Src, test_file(Module, ".dontcompile")),
     code:purge(Module),
     code:delete(Module),
     code:set_path(OldPath).
@@ -971,10 +1025,10 @@ cover_options_({_OldPath, Src, Module}) ->
     % Test that compilation options (include paths and preprocessor
     % definitions) are used when un-mecking previously cover compiled
     % modules.
-    CompilerOptions = [{i, "../test/include"}, {d, 'TEST', true}],
+    CompilerOptions = [{i, test_include()}, {d, 'TEST', true}],
     % The option recover feature depends on having the BEAM file
     % available.
-    {ok, _} = compile:file(Src, [{outdir, "../test"}|CompilerOptions]),
+    {ok, _} = compile:file(Src, [{outdir, test_dir()}|CompilerOptions]),
     {ok, _} = cover:compile(Src, CompilerOptions),
     a      = Module:a(),
     b      = Module:b(),
@@ -986,23 +1040,28 @@ cover_options_({_OldPath, Src, Module}) ->
     % 2 instead of 3, as above
     ?assertEqual({ok, {Module, {2,0}}}, cover:analyze(Module, module)).
 
--ifdef(cover_empty_compile_opts).
--define(compile_options, []).
--else.
--define(compile_options, [{i,"../test/include"},{d,'TEST',true}]).
--endif.
 cover_options_fail_({_OldPath, Src, Module}) ->
     %% This may look like the test above but there is a subtle
     %% difference.  When `cover:compile_beam' is called it squashes
     %% compile options.  This test verifies that function `b/0', which
     %% relies on the `TEST' directive being set can still be called
     %% after the module is meck'ed.
-    CompilerOptions = [{i, "../test/include"}, {d, 'TEST', true},
-                       {outdir, "../test"}, debug_info],
+    CompilerOptions = [
+        debug_info,
+        {i, test_include()},
+        {outdir, test_dir()},
+        {d, 'TEST', true}
+    ],
     {ok, _} = compile:file(Src, CompilerOptions),
-    ?assertEqual(CompilerOptions, meck_code:compile_options(Module)),
+    ?assertEqual(
+        proplists:delete(outdir, lists:sort(CompilerOptions)),
+        proplists:delete(outdir, lists:sort(meck_code:compile_options(Module)))
+    ),
     {ok, _} = cover:compile_beam(Module),
-    ?assertEqual(?compile_options, meck_code:compile_options(Module)),
+    ?assertEqual(
+        [{i, test_include()}, {d, 'TEST', true}],
+        meck_code:compile_options(Module)
+    ),
     a      = Module:a(),
     b      = Module:b(),
     {1, 2} = Module:c(1, 2),
@@ -1016,7 +1075,18 @@ cover_options_fail_({_OldPath, Src, Module}) ->
     %% Verify passthru calls went to cover
     ?assertEqual({ok, {Module, 4}}, cover:analyze(Module, calls, module)).
 
-join(Path, Module, Ext) -> filename:join(Path, atom_to_list(Module) ++ Ext).
+test_file(Module, Ext) ->
+    filename:join(test_dir(), atom_to_list(Module) ++ Ext).
+
+test_dir() ->
+    case code:which(?MODULE) of
+        Filename when is_list(Filename) ->
+            filename:dirname(Filename);
+        Atom when is_atom(Atom) ->
+            error({test_dir_not_found, ?MODULE, Atom})
+    end.
+
+test_include() -> filename:join(test_dir(), "include").
 
 run_mock_no_cover_file(Module) ->
     ok = meck:new(Module),
@@ -1028,19 +1098,38 @@ run_mock_no_cover_file(Module) ->
 %% @doc Verify that passthrough calls _don't_ appear in cover
 %% analysis.
 no_cover_passthrough_test() ->
-    {ok, _} = cover:compile("../test/meck_test_module.erl"),
+    {ok, _} = cover:compile("test/meck_test_module.erl"),
     {ok, {meck_test_module, {0,3}}} = cover:analyze(meck_test_module, module),
     passthrough_test([no_passthrough_cover]),
     {ok, {meck_test_module, {0,3}}} = cover:analyze(meck_test_module, module).
 
 %% @doc Verify that passthrough calls appear in cover analysis.
 cover_passthrough_test() ->
-    {ok, _} = cover:compile("../test/meck_test_module.erl"),
+    {ok, _} = cover:compile("test/meck_test_module.erl"),
     ?assertEqual({ok, {meck_test_module, {0,3}}},
                  cover:analyze(meck_test_module, module)),
     passthrough_test([]),
     ?assertEqual({ok, {meck_test_module, {2,1}}},
                  cover:analyze(meck_test_module, module)).
+
+cover_path_test() ->
+    {ok, _} = cover:compile("test/meck_test_module.erl"),
+    ?assertEqual({ok, {meck_test_module, {0,3}}},
+                 cover:analyze(meck_test_module, module)),
+    ok = meck:new(meck_test_module, [passthrough]),
+    ok = meck:expect(meck_test_module, a, fun() -> c end),
+    ?assertEqual(c, meck_test_module:a()),
+    ?assertEqual(b, meck_test_module:b()),
+    ?assertEqual({1, 2}, meck_test_module:c(1, 2)),
+    {ok, CWD} = file:get_cwd(),
+    try
+        ok = file:set_cwd("/tmp"),
+        ok = meck:unload(meck_test_module),
+        ?assertEqual({ok, {meck_test_module, {2,1}}},
+                     cover:analyze(meck_test_module, module))
+    after
+        ok = file:set_cwd(CWD)
+    end.
 
 % @doc The mocked module is unloaded if the meck process crashes.
 unload_when_crashed_test() ->
@@ -1050,8 +1139,10 @@ unload_when_crashed_test() ->
     Pid = whereis(SaltedName),
     ?assertEqual(true, is_pid(Pid)),
     unlink(Pid),
+    error_logger:tty(false),
     exit(Pid, expected_test_exit),
     timer:sleep(100),
+    error_logger:tty(true),
     ?assertEqual(undefined, whereis(SaltedName)),
     ?assertEqual(false, code:is_loaded(mymod)).
 
@@ -1062,6 +1153,30 @@ unlink_test() ->
     {links, Links} = process_info(whereis(SaltedName), links),
     ?assert(not lists:member(self(), Links)),
     ok = meck:unload(mymod).
+
+%% @doc A concurrent process calling into the mocked module while it's
+%% being unloaded gets either the mocked response or the original
+%% response, but won't crash.
+atomic_unload_test() ->
+    ok = meck:new(meck_test_module),
+    ok = meck:expect(meck_test_module, a, fun () -> c end),
+
+    %% Suspend the meck_proc in order to ensure all messages are in
+    %% its inbox in the correct order before it would process them
+    Proc = meck_util:proc_name(meck_test_module),
+    sys:suspend(Proc),
+    StopReq = concurrent_req(
+                Proc,
+                fun () -> ?assertEqual(ok, meck:unload(meck_test_module)) end),
+    SpecReq = concurrent_req(
+                Proc,
+                fun () -> ?assertMatch(V when V =:= a orelse V =:= c,
+                                       meck_test_module:a())
+                end),
+    sys:resume(Proc),
+
+    ?assertEqual(normal, wait_concurrent_req(StopReq)),
+    ?assertEqual(normal, wait_concurrent_req(SpecReq)).
 
 %% @doc Exception is thrown when you run expect on a non-existing (and not yet
 %% mocked) module.
@@ -1121,6 +1236,14 @@ multi_delete_test() ->
     ?assert(meck:validate(Mods)),
     ok = meck:unload(Mods).
 
+multi_expects_test() ->
+    Mods = [mod1, mod2, mod3],
+    ok = meck:new(Mods, [non_strict]),
+    ok = meck:expect(Mods, test, 0, ok),
+    ?assertEqual([{mod1, test, 0}, {mod2, test, 0}, {mod3, test, 0}],
+                 lists:sort(meck:expects(Mods))),
+    ok = meck:unload(Mods).
+
 multi_reset_test() ->
     % Given
     Mods = [mod1, mod2, mod3],
@@ -1156,14 +1279,14 @@ remote_meck_test_() ->
 
 remote_setup() ->
     [] = os:cmd("epmd -daemon"),
-    case node() of
-      'nonode@nohost' -> Hostname = "localhost";
-      _               -> Hostname = test_server_sup:hoststr()
+    Hostname = case node() of
+      'nonode@nohost' -> "localhost";
+      _               -> test_server_sup:hoststr()
     end,
     Myself = list_to_atom("meck_eunit_test@" ++ Hostname),
     net_kernel:start([Myself, shortnames]),
     {ok, Node} = slave:start_link(list_to_atom(Hostname), meck_remote_test,
-                                  "-pa test"),
+                                  "-pa \"" ++ test_dir() ++ "\""),
     {Mod, Bin, File} = code:get_object_code(meck),
     true = rpc:call(Node, code, add_path, [filename:dirname(File)]),
     {module, Mod} = rpc:call(Node, code, load_binary, [Mod, File, Bin]),
@@ -1181,7 +1304,7 @@ remote_meck_({Node, Mod}) ->
     ?assertEqual(true, rpc:call(Node, Mod, test, [])).
 
 remote_meck_cover_({Node, Mod}) ->
-    {ok, Mod} = cover:compile(Mod),
+    {ok, Mod} = cover:compile(test_file(Mod, ".erl")),
     {ok, _Nodes} = cover:start([Node]),
     ?assertEqual(ok, rpc:call(Node, meck, new, [Mod])).
 
@@ -1197,8 +1320,8 @@ can_mock_sticky_modules_test() ->
 sticky_directory_test_() ->
     {foreach, fun sticky_setup/0, fun sticky_teardown/1,
      [{with, [T]}
-      || T <- [fun ?MODULE:can_mock_sticky_module_not_yet_loaded_/1,
-               fun ?MODULE:cannot_mock_sticky_module_without_unstick_/1]]}.
+      || T <- [fun can_mock_sticky_module_not_yet_loaded_/1,
+               fun cannot_mock_sticky_module_without_unstick_/1]]}.
 
 sticky_setup() ->
     % Find out where the beam file is (purge because it is cover compiled)
@@ -1237,7 +1360,9 @@ can_mock_sticky_module_not_yet_loaded_({Mod, _}) ->
     ?assert(code:is_sticky(Mod)).
 
 cannot_mock_sticky_module_without_unstick_({Mod, _}) ->
-    ?assertError(module_is_sticky, meck:new(Mod, [no_link])).
+    error_logger:tty(false),
+    ?assertError({module_is_sticky, Mod}, meck:new(Mod, [no_link])),
+    error_logger:tty(true).
 
 can_mock_non_sticky_module_test() ->
     ?assertNot(code:is_sticky(meck_test_module)),
@@ -1341,6 +1466,7 @@ wait_timeout_test() ->
     meck:unload().
 
 wait_for_the_same_pattern_on_different_processes_test() ->
+    error_logger:tty(false),
     %% Given
     meck:new(test, [non_strict]),
     meck:expect(test, foo, 2, ok),
@@ -1364,9 +1490,11 @@ wait_for_the_same_pattern_on_different_processes_test() ->
     ?assertTerminated(MonitorRef1, normal, 300),
     ?assertTerminated(MonitorRef2, {timeout, _}, 300),
     %% Clean
-    meck:unload().
+    meck:unload(),
+    error_logger:tty(true).
 
 wait_for_different_patterns_on_different_processes_test() ->
+    error_logger:tty(false),
     %% Given
     meck:new(test, [non_strict]),
     meck:expect(test, foo, 1, ok),
@@ -1393,7 +1521,8 @@ wait_for_different_patterns_on_different_processes_test() ->
     ?assertTerminated(MonitorRef1, {timeout, _}, 300),
     ?assertTerminated(MonitorRef2, normal, 300),
     %% Clean
-    meck:unload().
+    meck:unload(),
+    error_logger:tty(true).
 
 wait_purge_expired_tracker_test() ->
     %% Given
@@ -1409,6 +1538,43 @@ wait_purge_expired_tracker_test() ->
     %% Clean
     meck:unload().
 
+
+meck_passthrough_test_() ->
+    {foreach, fun setup_passthrough/0, fun teardown/1,
+     [{with, [T]} || T <- [
+                           fun delete_passthrough_/1,
+                           fun delete_passthrough_force_/1,
+                           fun expects_passthrough_/1
+                          ]]}.
+
+setup_passthrough() ->
+    % Uncomment to run tests with dbg:
+    % dbg:tracer(),
+    % dbg:p(all, call),
+    % dbg:tpl(meck, []),
+    ok = meck:new(meck_test_module, [passthrough, non_strict]),
+    meck_test_module.
+
+delete_passthrough_(Mod) ->
+    ok = meck:expect(Mod, c, 2, {c, d}),
+    ?assertMatch({c, d}, Mod:c(a, b)),
+    ?assertEqual(ok, meck:delete(Mod, c, 2)),
+    ?assertMatch({a, b}, Mod:c(a, b)),
+    ?assert(meck:validate(Mod)).
+
+delete_passthrough_force_(Mod) ->
+    ok = meck:expect(Mod, c, 2, ok),
+    ?assertEqual(ok, meck:delete(Mod, c, 2, true)),
+    ?assertError(undef, Mod:test(a, b)),
+    ?assert(meck:validate(Mod)).
+
+expects_passthrough_(Mod) ->
+    ok = meck:expect(Mod, test, 2, ok),
+    ?assertEqual([{Mod, a, 0}, {Mod, b, 0}, {Mod, c, 2}, {Mod, test, 2}],
+                 lists:sort(meck:expects(Mod, false))),
+    ?assertEqual([{Mod, test, 2}], meck:expects(Mod, true)).
+
+
 %%=============================================================================
 %% Internal Functions
 %%=============================================================================
@@ -1420,3 +1586,49 @@ assert_called(Mod, Function, Args, WasCalled) ->
 assert_called(Mod, Function, Args, Pid, WasCalled) ->
     ?assertEqual(WasCalled, meck:called(Mod, Function, Args, Pid)),
     ?assert(meck:validate(Mod)).
+
+%% @doc Spawn a new process to concurrently call `Fun'. `Fun' is
+%% expected to send a request to the specified process, and this
+%% function will wait for this message to arrive. (Therefore the
+%% process should be suspended and not consuming its message queue.)
+%%
+%% The returned request handle can be used later in in {@link
+%% wait_concurrent_req/1} to wait for the concurrent process to
+%% terminate.
+concurrent_req(Name, Fun) when is_atom(Name) ->
+    case whereis(Name) of
+        Pid when is_pid(Pid) ->
+            concurrent_req(Pid, Fun);
+        undefined ->
+            exit(noproc)
+    end;
+concurrent_req(Pid, Fun) when is_pid(Pid) ->
+    {message_queue_len, Msgs} = process_info(Pid, message_queue_len),
+    Req = spawn_monitor(Fun),
+    wait_message(Pid, Msgs + 1, 100),
+    Req.
+
+%% @doc Wait for a concurrent request started with {@link
+%% concurrent_req/2} to terminate. The return value is the exit reason
+%% of the process.
+wait_concurrent_req(Req = {Pid, Monitor}) ->
+    receive
+        {'DOWN', Monitor, process, Pid, Reason} ->
+            Reason
+    after
+        1000 ->
+            exit(Pid, kill),
+            wait_concurrent_req(Req)
+    end.
+
+wait_message(Pid, _ExpMsgs, Retries) when Retries < 0 ->
+    exit(Pid, kill),
+    exit(wait_message_timeout);
+wait_message(Pid, ExpMsgs, Retries) ->
+    {message_queue_len, Msgs} = process_info(Pid, message_queue_len),
+    if Msgs >= ExpMsgs ->
+            ok;
+       true ->
+            timer:sleep(1),
+            wait_message(Pid, ExpMsgs, Retries - 1)
+    end.

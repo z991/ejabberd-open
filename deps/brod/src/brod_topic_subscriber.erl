@@ -1,5 +1,5 @@
 %%%
-%%%   Copyright (c) 2016-2017 Klarna AB
+%%%   Copyright (c) 2016-2018 Klarna Bank AB (publ)
 %%%
 %%%   Licensed under the Apache License, Version 2.0 (the "License");
 %%%   you may not use this file except in compliance with the License.
@@ -45,7 +45,7 @@
 -type cb_state() :: term().
 -type cb_ret() :: {ok, cb_state()} | {ok, ack, cb_state()}.
 -type cb_fun() :: fun(( brod:partition()
-                      , brod:message()
+                      , brod:message() | brod:message_set()
                       , cb_state()) -> cb_ret()).
 -type committed_offsets() :: [{brod:partition(), brod:offset()}].
 -type ack_ref()  :: {brod:partition(), brod:offset()}.
@@ -74,9 +74,10 @@
 %%
 %% NOTE: While this callback function is being evaluated, the fetch-ahead
 %%       partition-consumers are polling for more messages behind the scene
-%%       unless prefetch_count is set to 0 in consumer config.
+%%       unless prefetch_count and prefetch_bytes are set to 0 in consumer
+%%       config.
 -callback handle_message(brod:partition(),
-                         #kafka_message{} | #kafka_message_set{},
+                         brod:message() | brod:message_set(),
                          cb_state()) -> cb_ret().
 
 %%%_* Types and macros =========================================================
@@ -86,17 +87,22 @@
         , consumer_pid  :: ?undef | pid() | {down, string(), any()}
         , consumer_mref :: ?undef | reference()
         , acked_offset  :: ?undef | brod:offset()
+        , last_offset   :: ?undef | brod:offset() % last offset in last fetch
         }).
+
+-type consumer() :: #consumer{}.
 
 -record(state,
         { client         :: brod:client()
         , client_mref    :: reference()
         , topic          :: brod:topic()
-        , consumers = [] :: [#consumer{}]
+        , consumers = [] :: [consumer()]
         , cb_fun         :: cb_fun()
         , cb_state       :: cb_state()
         , message_type   :: message | message_set
         }).
+
+-type state() :: #state{}.
 
 %% delay 2 seconds retry the failed subscription to partiton consumer process
 -define(RESUBSCRIBE_DELAY, 2000).
@@ -112,7 +118,6 @@
 %% @doc Start (link) a topic subscriber which receives and processes the
 %% messages from the given partition set. Use atom 'all' to subscribe to all
 %% partitions. Messages are handled by calling CbModule:handle_message
-%% @end
 -spec start_link(brod:client(), brod:topic(), all | [brod:partition()],
                  brod:consumer_config(), module(), term()) ->
         {ok, pid()} | {error, any()}.
@@ -126,7 +131,6 @@ start_link(Client, Topic, Partitions, ConsumerConfig,
 %% messages or message sets from the given partition set. Use atom 'all'
 %% to subscribe to all partitions. Messages are handled by calling
 %% CbModule:handle_message
-%% @end
 -spec start_link(brod:client(), brod:topic(), all | [brod:partition()],
                  brod:consumer_config(), message | message_set,
                  module(), term()) ->
@@ -140,7 +144,9 @@ start_link(Client, Topic, Partitions, ConsumerConfig,
 %% @doc Start (link) a topic subscriber which receives and processes the
 %% messages from the given partition set. Use atom 'all' to subscribe to all
 %% partitions. Messages are handled by calling the callback function.
-%% @end
+%%
+%% NOTE: CommittedOffsets are the offsets for the messages that are successfully
+%%       processed (acknoledged), not the begin-offset ot start fetching from.
 -spec start_link(brod:client(), brod:topic(), all | [brod:partition()],
                  brod:consumer_config(), committed_offsets(),
                  message | message_set, cb_fun(), cb_state()) ->
@@ -192,19 +198,9 @@ init({Client, Topic, Partitions, ConsumerConfig,
           },
   {ok, State}.
 
-handle_info({_ConsumerPid,
-             #kafka_message_set{ topic     = Topic
-                               , partition = Partition
-                               , messages  = Messages
-                               }
-            },
-            #state{topic = Topic, message_type = message} = State) ->
-  NewState = handle_messages(Partition, Messages, State),
-  {noreply, NewState};
-handle_info({_ConsumerPid, #kafka_message_set{topic = Topic} = MessageSet},
-            #state{topic = Topic, message_type = message_set} = State) ->
-  NewState = handle_message_set(MessageSet, State),
-  {noreply, NewState};
+handle_info({_ConsumerPid, #kafka_message_set{} = MsgSet}, State0) ->
+  State = handle_consumer_delivery(MsgSet, State0),
+  {noreply, State};
 handle_info(?LO_CMD_START_CONSUMER(ConsumerConfig, CommittedOffsets,
                                    Partitions0),
              #state{ client = Client
@@ -250,16 +246,16 @@ handle_info({'DOWN', Mref, process, _Pid, _Reason},
   {stop, client_down, State};
 handle_info({'DOWN', _Mref, process, Pid, Reason},
             #state{consumers = Consumers} = State) ->
-  case lists:keyfind(Pid, #consumer.consumer_pid, Consumers) of
-    #consumer{partition = Partition} = C ->
+  case get_consumer(Pid, Consumers) of
+    #consumer{} = C ->
       Consumer = C#consumer{ consumer_pid  = ?DOWN(Reason)
                            , consumer_mref = ?undef
                            },
-      NewConsumers = lists:keyreplace(Partition, #consumer.partition,
-                                      Consumers, Consumer),
+      NewConsumers = put_consumer(Consumer, Consumers),
       NewState = State#state{consumers = NewConsumers},
       {noreply, NewState};
     false ->
+      %% not a consumer pid
       {noreply, State}
   end;
 handle_info(_Info, State) ->
@@ -286,6 +282,27 @@ terminate(_Reason, #state{}) ->
 
 %%%_* Internal Functions =======================================================
 
+handle_consumer_delivery(#kafka_message_set{ topic     = Topic
+                                           , partition = Partition
+                                           , messages  = Messages
+                                           } = MsgSet,
+                         #state{ topic = Topic
+                               , message_type = MsgType
+                               } = State0) ->
+  State = update_last_offset(Partition, Messages, State0),
+  case MsgType of
+    message -> handle_messages(Partition, Messages, State);
+    message_set -> handle_message_set(MsgSet, State)
+  end.
+
+update_last_offset(Partition, Messages,
+                   #state{consumers = Consumers} = State) ->
+  %% brod_consumer never delivers empty message set, lists:last is safe
+  #kafka_message{offset = LastOffset} = lists:last(Messages),
+  C = get_consumer(Partition, Consumers),
+  Consumer = C#consumer{last_offset = LastOffset},
+  State#state{consumers = put_consumer(Consumer, Consumers)}.
+
 subscribe_partitions(#state{ client    = Client
                            , topic     = Topic
                            , consumers = Consumers0
@@ -298,10 +315,17 @@ subscribe_partition(Client, Topic, Consumer) ->
   #consumer{ partition    = Partition
            , consumer_pid = Pid
            , acked_offset = AckedOffset
+           , last_offset  = LastOffset
            } = Consumer,
   case brod_utils:is_pid_alive(Pid) of
     true ->
       %% already subscribed
+      Consumer;
+    false when AckedOffset =/= LastOffset andalso LastOffset =/= ?undef ->
+      %% The last fetched offset is not yet acked,
+      %% do not re-subscribe now to keep it simple and slow.
+      %% Otherwise if we subscribe with {begin_offset, LastOffset + 1}
+      %% we may exceed pre-fetch window size.
       Consumer;
     false ->
       Options =
@@ -310,8 +334,9 @@ subscribe_partition(Client, Topic, Consumer) ->
             %% the default or configured 'begin_offset' will be used
             [];
           false ->
-            AckedOffset >= 0 orelse erlang:error({invalid_offset, AckedOffset}),
-            [{begin_offset, AckedOffset+1}]
+            StartOffset = AckedOffset + 1,
+            StartOffset >= 0 orelse erlang:error({invalid_offset, AckedOffset}),
+            [{begin_offset, StartOffset}]
         end,
       case brod:subscribe(Client, self(), Topic, Partition, Options) of
         {ok, ConsumerPid} ->
@@ -369,26 +394,26 @@ handle_messages(Partition, [Msg | Rest], State) ->
     end,
   handle_messages(Partition, Rest, NewState).
 
--spec handle_ack(ack_ref(), #state{}) -> #state{}.
+-spec handle_ack(ack_ref(), state()) -> state().
 handle_ack(AckRef, #state{consumers = Consumers} = State) ->
   {Partition, Offset} = AckRef,
-  case lists:keyfind(Partition, #consumer.partition, Consumers) of
-    #consumer{consumer_pid = ConsumerPid} = Consumer ->
-      ok = consume_ack(ConsumerPid, Offset),
-      NewConsumer = Consumer#consumer{acked_offset = Offset},
-      NewConsumers = lists:keyreplace(Partition,
-                                      #consumer.partition,
-                                      Consumers, NewConsumer),
-      State#state{consumers = NewConsumers};
-    false ->
-      State
-  end.
+  #consumer{consumer_pid = Pid} = Consumer = get_consumer(Partition, Consumers),
+  ok = consume_ack(Pid, Offset),
+  NewConsumer = Consumer#consumer{acked_offset = Offset},
+  NewConsumers = put_consumer(NewConsumer, Consumers),
+  State#state{consumers = NewConsumers}.
 
-%% @private Tell consumer process to fetch more (if pre-fetch count allows).
-consume_ack(Pid, Offset) when is_pid(Pid) ->
-  ok = brod:consume_ack(Pid, Offset);
-consume_ack(_Down, _Offset) ->
-  %% consumer is down, should be restarted by its supervisor
+get_consumer(Partition, Consumers) when is_integer(Partition) ->
+  lists:keyfind(Partition, #consumer.partition, Consumers);
+get_consumer(Pid, Consumers) when is_pid(Pid) ->
+  lists:keyfind(Pid, #consumer.consumer_pid, Consumers).
+
+put_consumer(#consumer{partition = P} = Consumer, Consumers) ->
+  lists:keyreplace(P, #consumer.partition, Consumers, Consumer).
+
+%% Tell consumer process to fetch more (if pre-fetch count/byte limit allows).
+consume_ack(Pid, Offset) ->
+  is_pid(Pid) andalso brod:consume_ack(Pid, Offset),
   ok.
 
 send_lo_cmd(CMD) -> send_lo_cmd(CMD, 0).

@@ -1,11 +1,11 @@
 Ranch TCP reverse example
 =========================
 
-This example uses a `gen_server` to handle a protocol to revese input.
+This example uses a `gen_statem` to handle a protocol to revese input.
 See `reverse_protocol.erl` for the implementation. Documentation about
 this topic can be found in the guide:
 
-  http://ninenines.eu/docs/en/ranch/HEAD/guide/protocols/#using_gen_server
+  http://ninenines.eu/docs/en/ranch/HEAD/guide/protocols/#using_gen_statem
 
 To try this example, you need GNU `make` and `git` in your PATH.
 
@@ -18,7 +18,7 @@ $ make
 To start the release in the foreground:
 
 ``` bash
-$ ./_rel/bin/tcp_reverse_example console
+$ ./_rel/tcp_reverse_example/bin/tcp_reverse_example console
 ```
 
 Then start a telnet session to port 5555:

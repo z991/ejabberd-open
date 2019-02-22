@@ -1,5 +1,5 @@
 %%%
-%%%   Copyright (c) 2014-2017, Klarna AB
+%%%   Copyright (c) 2014-2018, Klarna Bank AB (publ)
 %%%
 %%%   Licensed under the Apache License, Version 2.0 (the "License");
 %%%   you may not use this file except in compliance with the License.
@@ -43,7 +43,20 @@
                   | ?undef.
 
 %% Is kafka error code
--define(IS_ERROR(EC), kpro_error_code:is_error(EC)).
+-define(IS_ERROR(EC), ((EC) =/= ?no_error)).
+
+-define(KV(Key, Value), {Key, Value}).
+-define(TKV(Ts, Key, Value), {Ts, Key, Value}).
+
+-define(acked, brod_produce_req_acked).
+-define(buffered, brod_produce_req_buffered).
+
+-define(KAFKA_0_9,  {0,  9}).
+-define(KAFKA_0_10, {0, 10}).
+-define(KAFKA_0_11, {0, 11}).
+-define(KAFKA_1_0,  {1,  0}).
+-define(KAFKA_1_1,  {1,  1}).
+-define(LATEST_KAFKA_VERSION, ?KAFKA_1_1).
 
 -endif. % include brod_int.hrl
 

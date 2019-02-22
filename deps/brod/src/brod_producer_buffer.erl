@@ -1,5 +1,5 @@
 %%%
-%%%   Copyright (c) 2015-2017, Klarna AB
+%%%   Copyright (c) 2015-2018, Klarna Bank AB (publ)
 %%%
 %%%   Licensed under the Apache License, Version 2.0 (the "License");
 %%%   you may not use this file except in compliance with the License.
@@ -18,11 +18,12 @@
 -module(brod_producer_buffer).
 
 -export([ new/7
-        , add/4
+        , add/3
         , ack/2
+        , ack/3
         , nack/3
         , nack_all/2
-        , maybe_send/2
+        , maybe_send/3
         ]).
 
 -export([ is_empty/1
@@ -37,19 +38,22 @@
 -type milli_ts() :: pos_integer().
 -type milli_sec() :: non_neg_integer().
 -type count() :: non_neg_integer().
+-type cb() :: fun((?buffered | {?acked, offset()}) -> ok).
 
 -record(req,
-        { call_ref :: brod:call_ref()
+        { cb       :: cb()
         , data     :: data()
         , bytes    :: non_neg_integer()
+        , msg_cnt  :: non_neg_integer() %% messages in the set
         , ctime    :: milli_ts() %% time when request was created
         , failures :: non_neg_integer() %% the number of failed attempts
         }).
 -type req() :: #req{}.
 
--type send_fun() :: fun((pid(), [{brod:key(), brod:value()}]) ->
+-type vsn() :: brod_kafka_apis:vsn().
+-type send_fun() :: fun((pid(), [{brod:key(), brod:value()}], vsn()) ->
                         ok |
-                        {ok, brod:corr_id()} |
+                        {ok, reference()} |
                         {error, any()}).
 -define(ERR_FUN, fun() -> erlang:error(bad_init) end).
 
@@ -65,20 +69,19 @@
         , send_fun          = ?ERR_FUN   :: send_fun()
         , buffer_count      = 0          :: non_neg_integer()
         , onwire_count      = 0          :: non_neg_integer()
-        , pending           = ?NEW_QUEUE :: queue:queue(#req{})
-        , buffer            = ?NEW_QUEUE :: queue:queue(#req{})
-        , onwire            = []         :: [{brod:corr_id(), [#req{}]}]
+        , pending           = ?NEW_QUEUE :: queue:queue(req())
+        , buffer            = ?NEW_QUEUE :: queue:queue(req())
+        , onwire            = []         :: [{reference(), [req()]}]
         }).
 
 -opaque buf() :: #buf{}.
 
--type corr_id() :: brod:corr_id().
+-type offset()  :: brod:offset().
 
 %%%_* APIs =====================================================================
 
 %% @doc Create a new buffer
 %% For more details: @see brod_producer:start_link/4
-%% @end
 -spec new(pos_integer(), pos_integer(), pos_integer(),
           integer(), milli_sec(), count(), send_fun()) -> buf().
 new(BufferLimit, OnWireLimit, MaxBatchSize, MaxRetry,
@@ -100,12 +103,12 @@ new(BufferLimit, OnWireLimit, MaxBatchSize, MaxRetry,
 
 %% @doc Buffer a produce request.
 %% Respond to caller immediately if the buffer limit is not yet reached.
-%% @end
--spec add(buf(), brod:call_ref(), brod:key(), brod:value()) -> {ok, buf()}.
-add(#buf{pending = Pending} = Buf, CallRef, Key, Value) ->
-  Req = #req{ call_ref = CallRef
-            , data     = fun() -> {Key, Value} end
-            , bytes    = data_size(Key) + data_size(Value)
+-spec add(buf(), cb(), brod:batch_input()) -> buf().
+add(#buf{pending = Pending} = Buf, Cb, Batch) ->
+  Req = #req{ cb       = Cb
+            , data     = fun() -> Batch end
+            , bytes    = data_size(Batch)
+            , msg_cnt  = length(Batch)
             , ctime    = now_ms()
             , failures = 0
             },
@@ -124,57 +127,50 @@ add(#buf{pending = Pending} = Buf, CallRef, Key, Value) ->
 %%   Caller should retry after the returned milli-seconds.
 %% retry:
 %%   Failed to send a batch, caller should schedule a delayed retry.
-%% @end
--spec maybe_send(buf(), pid()) -> {Action, buf()}
+-spec maybe_send(buf(), pid(), vsn()) -> {Action, buf()}
         when Action :: ok | retry | {delay, milli_sec()}.
-maybe_send(#buf{} = Buf, SockPid) ->
+maybe_send(#buf{} = Buf, Conn, Vsn) ->
   case take_reqs(Buf) of
     false          -> {ok, Buf};
     {delay, T}     -> {{delay, T}, Buf};
-    {Reqs, NewBuf} -> do_send(Reqs, NewBuf, SockPid)
+    {Reqs, NewBuf} -> do_send(Reqs, NewBuf, Conn, Vsn)
   end.
 
 %% @doc Reply 'acked' to callers.
--spec ack(buf(), corr_id()) -> {ok, buf()} | {error, none | corr_id()}.
+-spec ack(buf(), reference()) -> buf().
+ack(Buf, Ref) ->
+  ack(Buf, Ref, ?BROD_PRODUCE_UNKNOWN_OFFSET).
+
+%% @doc Reply 'acked' with base offset to callers.
+-spec ack(buf(), reference(), offset()) -> buf().
 ack(#buf{ onwire_count = OnWireCount
-        , onwire       = [{CorrId, Reqs} | Rest]
-        } = Buf, CorrId) ->
-  ok = lists:foreach(fun reply_acked/1, Reqs),
-  {ok, Buf#buf{ onwire_count = OnWireCount - 1
-              , onwire       = Rest
-              }};
-ack(#buf{onwire = OnWire}, CorrIdReceived) ->
-  %% unkonwn corr-id, ignore
-  CorrIdExpected = assert_corr_id(OnWire, CorrIdReceived),
-  {error, CorrIdExpected}.
+        , onwire       = [{Ref, Reqs} | Rest]
+        } = Buf, Ref, BaseOffset) ->
+  _ = lists:foldl(fun eval_acked/2, BaseOffset, Reqs),
+  Buf#buf{ onwire_count = OnWireCount - 1
+         , onwire       = Rest
+         }.
 
 %% @doc 'Negative' ack, put all sent requests back to the head of buffer.
 %% An 'exit' exception is raised if any of the negative-acked requests
 %% reached maximum retry limit.
-%% Unknown correlation IDs are discarded.
-%% @end
--spec nack(buf(), corr_id(), any()) -> {ok, buf()} | {error, none | corr_id()}.
-nack(#buf{onwire = [{CorrId, _Reqs} | _]} = Buf, CorrId, Reason) ->
-  nack_all(Buf, Reason);
-nack(#buf{onwire = OnWire}, CorrIdReceived, _Reason) ->
-  CorrIdExpected = assert_corr_id(OnWire, CorrIdReceived),
-  {error, CorrIdExpected}.
+-spec nack(buf(), reference(), any()) -> buf().
+nack(#buf{onwire = [{Ref, _Reqs} | _]} = Buf, Ref, Reason) ->
+  nack_all(Buf, Reason).
 
 %% @doc 'Negative' ack, put all sent requests back to the head of buffer.
 %% An 'exit' exception is raised if any of the negative-acked requests
 %% reached maximum retry limit.
-%% @end
--spec nack_all(buf(), any()) -> {ok, buf()}.
+-spec nack_all(buf(), any()) -> buf().
 nack_all(#buf{onwire = OnWire} = Buf, Reason) ->
-  AllOnWireReqs = lists:map(fun({_CorrId, Reqs}) -> Reqs end, OnWire),
+  AllOnWireReqs = lists:map(fun({_Ref, Reqs}) -> Reqs end, OnWire),
   NewBuf = Buf#buf{ onwire_count = 0
                   , onwire       = []
                   },
-  {ok, rebuffer_or_crash(lists:append(AllOnWireReqs), NewBuf, Reason)}.
+  rebuffer_or_crash(lists:append(AllOnWireReqs), NewBuf, Reason).
 
 %% @doc Return true if there is no message pending,
 %% buffered or waiting for ack.
-%% @end
 -spec is_empty(buf()) -> boolean().
 is_empty(#buf{ pending = Pending
              , buffer  = Buffer
@@ -186,34 +182,6 @@ is_empty(#buf{ pending = Pending
 
 %%%_* Internal functions =======================================================
 
-%% @private This is a validation on the received correlation IDs for produce
-%% responses, the assumption made in brod implementation is that kafka broker
-%% guarantees the produce responses are replied in the order the corresponding
-%% produce requests were received from clients.
-%% Return expected correlation ID, or otherwise raise an 'exit' exception.
-%% @end
--spec assert_corr_id([{corr_id(), [#req{}]}], corr_id()) -> none | corr_id().
-assert_corr_id(_OnWireRequests = [], _CorrIdReceived) ->
-  none;
-assert_corr_id([{CorrId, _Req} | _], CorrIdReceived) ->
-  case is_later_corr_id(CorrId, CorrIdReceived) of
-    true  -> exit({bad_order, CorrId, CorrIdReceived});
-    false -> CorrId
-  end.
-
-%% @private Compare two corr-ids, return true if ID-2 is considered a 'later'
-%% one comparing to ID1.
-%% Assuming that no clients would send up to 2^26 messages asynchronously.
-%% @end
--spec is_later_corr_id(corr_id(), corr_id()) -> boolean().
-is_later_corr_id(Id1, Id2) ->
-  Diff = abs(Id1 - Id2),
-  case Diff < (kpro:max_corr_id() div 2) of
-    true  -> Id1 < Id2;
-    false -> Id1 > Id2
-  end.
-
-%% @private
 -spec take_reqs(buf()) -> false | {delay, milli_sec()} | {[req()], buf()}.
 take_reqs(#buf{ onwire_count = OnWireCount
               , onwire_limit = OnWireLimit
@@ -227,11 +195,10 @@ take_reqs(#buf{ buffer = Buffer, pending = Pending} = Buf) ->
       false;
     false ->
       %% ensure buffer is not empty before calling do_take_reqs/1
-      {ok, NewBuf} = maybe_buffer(Buf),
+      NewBuf = maybe_buffer(Buf),
       do_take_reqs(NewBuf)
   end.
 
-%% @private
 -spec do_take_reqs(buf()) -> {delay, milli_sec()} | {[req()], buf()}.
 do_take_reqs(#buf{ max_linger_count = MaxLingerCount
                  , buffer_count     = BufferCount
@@ -253,7 +220,6 @@ do_take_reqs(#buf{ max_linger_ms = MaxLingerMs
       take_reqs_loop(Buf, _Acc = [], _AccBytes = 0)
   end.
 
-%% @private
 -spec take_reqs_loop(buf(), [req()], integer()) -> {[req()], buf()}.
 take_reqs_loop(#buf{ buffer_count = 0
                    , pending = Pending
@@ -266,14 +232,13 @@ take_reqs_loop(#buf{ buffer_count = 0
       {lists:reverse(Acc), Buf};
     false ->
       %% Take requests from pending to buffer
-      {ok, NewBuf} = maybe_buffer(Buf),
+      NewBuf = maybe_buffer(Buf),
       %% and continue to accumulate the batch
       take_reqs_loop_2(NewBuf, Acc, AccBytes)
   end;
 take_reqs_loop(Buf, Acc, AccBytes) ->
   take_reqs_loop_2(Buf, Acc, AccBytes).
 
-%% @private
 -spec take_reqs_loop_2(buf(), [req()], non_neg_integer()) -> {[req()], buf()}.
 take_reqs_loop_2(#buf{ buffer_count   = BufferCount
                      , buffer         = Buffer
@@ -287,7 +252,7 @@ take_reqs_loop_2(#buf{ buffer_count   = BufferCount
     true ->
       %% finished accumulating the batch
       %% take more pending ones into buffer
-      {ok, NewBuf} = maybe_buffer(Buf),
+      NewBuf = maybe_buffer(Buf),
       {lists:reverse(Acc), NewBuf};
     false ->
       {_, Rest} = queue:out(Buffer),
@@ -297,43 +262,42 @@ take_reqs_loop_2(#buf{ buffer_count   = BufferCount
       take_reqs_loop(NewBuf, [Req | Acc], BatchSize)
   end.
 
-%% @private Send produce request to kafka.
--spec do_send([req()], buf(), pid()) -> {Action, buf()}
+%% Send produce request to kafka.
+-spec do_send([req()], buf(), pid(), brod_kafka_apis:vsn()) -> {Action, buf()}
         when Action :: ok | retry | {delay, milli_sec()}.
 do_send(Reqs, #buf{ onwire_count = OnWireCount
                   , onwire       = OnWire
                   , send_fun     = SendFun
-                  } = Buf, SockPid) ->
-  MessageSet = lists:map(fun(#req{data = F}) -> F() end, Reqs),
-  case SendFun(SockPid, MessageSet) of
+                  } = Buf, Conn, Vsn) ->
+  Batch = lists:append(lists:map(fun(#req{data = F}) -> F() end, Reqs)),
+  case SendFun(Conn, Batch, Vsn) of
     ok ->
       %% fire and forget, do not add onwire counter
-      ok = lists:foreach(fun reply_acked/1, Reqs),
+      ok = lists:foreach(fun eval_acked/1, Reqs),
       %% continue to try next batch
-      maybe_send(Buf, SockPid);
-    {ok, CorrId} ->
+      maybe_send(Buf, Conn, Vsn);
+    {ok, Ref} ->
       %% Keep onwire message reference to match acks later on
       NewBuf = Buf#buf{ onwire_count = OnWireCount + 1
-                      , onwire       = OnWire ++ [{CorrId, Reqs}]
+                      , onwire       = OnWire ++ [{Ref, Reqs}]
                       },
       %% continue try next batch
-      maybe_send(NewBuf, SockPid);
+      maybe_send(NewBuf, Conn, Vsn);
     {error, Reason} ->
       %% The requests sent on-wire are not re-buffered here
       %% because there are still chances to receive acks for them.
       %% brod_producer should call nack_all to put all sent requests
       %% back to buffer for retry in any of the cases below:
-      %% 1. Socket pid monitoring 'DOWN' message is received
-      %% 2. Discovered a new leader (a new socket pid)
+      %% 1. Connection pid monitoring 'DOWN' message is received
+      %% 2. Discovered a new leader (a new connection pid)
       NewBuf = rebuffer_or_crash(Reqs, Buf, Reason),
       {retry, NewBuf}
   end.
 
-%% @private Put the produce requests back to buffer.
+%% Put the produce requests back to buffer.
 %% raise an 'exit' exception if the first request to send has reached
 %% retry limit
-%% @end
--spec rebuffer_or_crash([#req{}], buf(), any()) -> buf() | no_return().
+-spec rebuffer_or_crash([req()], buf(), any()) -> buf() | no_return().
 rebuffer_or_crash([#req{failures = Failures} | _],
                   #buf{max_retries = MaxRetries}, Reason)
   when MaxRetries >= 0 andalso Failures >= MaxRetries ->
@@ -351,8 +315,8 @@ rebuffer_or_crash(Reqs0, #buf{ buffer       = Buffer
          , buffer_count = length(Reqs) + BufferCount
          }.
 
-%% @private Take pending requests into buffer and reply 'buffered' to caller.
--spec maybe_buffer(buf()) -> {ok, buf()}.
+%% Take pending requests into buffer and reply 'buffered' to caller.
+-spec maybe_buffer(buf()) -> buf().
 maybe_buffer(#buf{ buffer_limit = BufferLimit
                  , buffer_count = BufferCount
                  , pending      = Pending
@@ -360,76 +324,45 @@ maybe_buffer(#buf{ buffer_limit = BufferLimit
                  } = Buf) when BufferCount < BufferLimit ->
   case queue:out(Pending) of
     {{value, Req}, NewPending} ->
-      ok = reply_buffered(Req),
+      ok = eval_buffered(Req),
       NewBuf = Buf#buf{ buffer_count = BufferCount + 1
                       , pending      = NewPending
                       , buffer       = queue:in(Req, Buffer)
                       },
       maybe_buffer(NewBuf);
     {empty, _} ->
-      {ok, Buf}
+      Buf
   end;
 maybe_buffer(#buf{} = Buf) ->
-  {ok, Buf}.
+  Buf.
 
--spec reply_buffered(#req{}) -> ok.
-reply_buffered(#req{call_ref = CallRef}) ->
-  Reply = #brod_produce_reply{ call_ref = CallRef
-                             , result   = brod_produce_req_buffered
-                             },
-  cast(CallRef#brod_call_ref.caller, Reply).
+-spec eval_buffered(req()) -> ok.
+eval_buffered(#req{cb = CbFun}) ->
+  _ = CbFun(?buffered),
+  ok.
 
--spec reply_acked(#req{}) -> ok.
-reply_acked(#req{call_ref = CallRef}) ->
-  Reply = #brod_produce_reply{ call_ref = CallRef
-                             , result   = brod_produce_req_acked
-                             },
-  cast(CallRef#brod_call_ref.caller, Reply).
+-spec eval_acked(req()) -> ok.
+eval_acked(Req) ->
+  _ = eval_acked(Req, ?BROD_PRODUCE_UNKNOWN_OFFSET),
+  ok.
 
-cast(Pid, Msg) ->
-  try
-    Pid ! Msg,
-    ok
-  catch _ : _ ->
-    ok
-  end.
+-spec eval_acked(req(), offset()) -> offset().
+eval_acked(#req{cb = CbFun, msg_cnt = Count}, Offset) ->
+  _ = CbFun({?acked, Offset}),
+  next_base_offset(Offset, Count).
 
--spec data_size(brod:key() | brod:value()) -> non_neg_integer().
+next_base_offset(?BROD_PRODUCE_UNKNOWN_OFFSET, _) ->
+  ?BROD_PRODUCE_UNKNOWN_OFFSET;
+next_base_offset(Offset, Count) ->
+  Offset + Count.
+
+-spec data_size(brod:batch_input()) -> non_neg_integer().
 data_size(Data) -> brod_utils:bytes(Data).
 
-%% @private
 -spec now_ms() -> milli_ts().
 now_ms() ->
   {M, S, Micro} = os:timestamp(),
   ((M * 1000000) + S) * 1000 + Micro div 1000.
-
-%%%_* Tests ====================================================================
-
--ifdef(TEST).
-
--include_lib("eunit/include/eunit.hrl").
-
-cast_test() ->
-  Ref = make_ref(),
-  ok = cast(self(), Ref),
-  receive Ref -> ok
-  end,
-  ok = cast(?undef, Ref).
-
-assert_corr_id_test() ->
-  Max = kpro:max_corr_id(),
-  {error, none} = ack(#buf{}, 0),
-  {error, none} = nack(#buf{}, 0, ignored),
-  {error, 1} = ack(#buf{onwire = [{1, req}]}, 0),
-  {error, 1} = nack(#buf{onwire = [{1, req}]}, 0, ignored),
-  {error, 1} = ack(#buf{onwire = [{1, req}]}, Max),
-  ?assertException(exit, {bad_order, 0, 1},
-                   ack(#buf{onwire = [{0, req}]}, 1)),
-  ?assertException(exit, {bad_order, Max, 0},
-                   ack(#buf{onwire = [{Max, req}]}, 0)),
-  ok.
-
--endif. % TEST
 
 %%%_* Emacs ====================================================================
 %%% Local Variables:

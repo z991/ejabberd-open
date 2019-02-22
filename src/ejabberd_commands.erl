@@ -676,14 +676,6 @@ check_access_commands(AccessCommands, Auth, Method, Command1, Arguments, CallerI
 
 check_auth(_Command, noauth) ->
     no_auth_provided;
-check_auth(Command, {User, Server, {oauth, Token}, _}) ->
-    ScopeList = cmd_scope(Command),
-    case ejabberd_oauth:check_token(User, Server, ScopeList, Token) of
-        true ->
-            {ok, User, Server};
-        _ ->
-            throw({error, invalid_account_data})
-    end;
 check_auth(_Command, {User, Server, Password, _}) when is_binary(Password) ->
     %% Check the account exists and password is valid
     case ejabberd_auth:check_password(User, <<"">>, Server, Password) of

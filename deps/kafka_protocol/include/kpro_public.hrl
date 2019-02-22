@@ -15,17 +15,15 @@
 -ifndef(KPRO_PUBLIC_HRL_).
 -define(KPRO_PUBLIC_HRL_, true).
 
-%% For applications on top of kafka client (brod).
-
 -record(kafka_message,
         { offset :: kpro:offset()
-        , magic_byte :: kpro:int8()
-        , attributes :: kpro:int8()
         , key :: kpro:bytes()
         , value :: kpro:bytes()
-        , crc :: non_neg_integer() %% not kpro:int32() because it's unsigned
-        , ts_type :: kpro:timestamp_type()
-        , ts :: kpro:int64()
+        , ts_type :: undefined %% magic 0
+                   | kpro:timestamp_type()  %% since magic 1
+        , ts :: undefined %% magic 0
+              | kpro:int64() %% since magic 1
+        , headers = [] :: kpro:headers() %% since magic 2
         }).
 
 -endif.

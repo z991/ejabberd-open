@@ -282,10 +282,10 @@ tcp        0      0 0.0.0.0:8080            0.0.0.0:*               LISTEN      
 
 ```
 $ cd /startalk/download
-$ wget http://erlang.org/download/otp_src_19.3.tar.gz
-$ tar -zxvf otp_src_19.3.tar.gz
-$ cd otp_src_19.3
-$ ./configure --prefix=/startalk/erlang1903
+$ wget http://erlang.org/download/otp_src_21.2.tar.gz
+$ tar -zxvf otp_src_21.2.tar.gz
+$ cd otp_src_21.2
+$ ./configure --prefix=/startalk/erlang2102
 $ make
 $ make install
 
@@ -294,7 +294,7 @@ $ vim ~/.bash_profile
  
 ----------------------------------
 # User specific environment and startup programs
-ERLANGPATH=/startalk/erlang1903
+ERLANGPATH=/startalk/erlang2102
 PATH=$PATH:$HOME/bin:$ERLANGPATH/bin
 ----------------------------------
  
@@ -313,7 +313,7 @@ Eshell V8.3  (abort with ^G)
 ```
 $ cd /startalk/download
 $ cd ejabberd-open/
-$ ./configure --prefix=/startalk/ejabberd --with-erlang=/startalk/erlang1903 --enable-pgsql --enable-full-xml
+$ ./configure --prefix=/startalk/ejabberd --with-erlang=/startalk/erlang2102 --enable-pgsql --enable-full-xml
 $ make
 $ make install
 $ cp ejabberd.yml.qunar /startalk/ejabberd/etc/ejabberd/ejabberd.yml
@@ -330,7 +330,7 @@ $ ./sbin/ejabberdctl start
 
 确认ejabberd安装成功
 $ ps -ef | grep 's ejabberd'
-startalk 23515     1  4 09:58 ?        00:00:03 /startalk/erlang1903/lib/erlang/erts-8.3/bin/beam.smp -K true -P 250000 -- -root /startalk/erlang1903/lib/erlang -progname erl -- -home /home/startalk -- -name ejabberd@startalk.com -noshell -noinput -noshell -noinput -mnesia dir "/startalk/ejabberd/var/lib/ejabberd" -ejabberd log_rate_limit 20000 log_rotate_size 504857600 log_rotate_count 41 log_rotate_date "$D0" -s ejabberd -smp auto start
+startalk 23515     1  4 09:58 ?        00:00:03 /startalk/erlang2102/lib/erlang/erts-8.3/bin/beam.smp -K true -P 250000 -- -root /startalk/erlang2102/lib/erlang -progname erl -- -home /home/startalk -- -name ejabberd@startalk.com -noshell -noinput -noshell -noinput -mnesia dir "/startalk/ejabberd/var/lib/ejabberd" -ejabberd log_rate_limit 20000 log_rotate_size 504857600 log_rotate_count 41 log_rotate_date "$D0" -s ejabberd -smp auto start
 ```
 
 ### 安装qtalk_cowboy
@@ -348,7 +348,7 @@ $ ./bin/ejb_http_server stop
 
 确认qtalk_cowboy服务启动成功
 $ ps -ef | grep ejb_http_server
-startalk 23644     1  4 10:01 ?        00:00:00 /home/work/erlang1903/lib/erlang/erts-8.3/bin/beam.smp -- -root /home/work/erlang1903/lib/erlang -progname erl -- -home /home/startalk -- -name ejb_http_server@startalk.com -noshell -noinput -pa ./ebin -pa ./deps/cowboy/ebin ./deps/cowlib/ebin ./deps/eredis/ebin ./deps/goldrush/ebin ./deps/lager/ebin ./deps/p1_pgsql/ebin ./deps/ranch/ebin ./deps/recon/ebin ./deps/rfc4627_jsonrpc/ebin -s ejb_http_server -smp enable -hidden -config ./config/lager -config ./config/ejb_http_server
+startalk 23644     1  4 10:01 ?        00:00:00 /home/work/erlang2102/lib/erlang/erts-8.3/bin/beam.smp -- -root /home/work/erlang2102/lib/erlang -progname erl -- -home /home/startalk -- -name ejb_http_server@startalk.com -noshell -noinput -pa ./ebin -pa ./deps/cowboy/ebin ./deps/cowlib/ebin ./deps/eredis/ebin ./deps/goldrush/ebin ./deps/lager/ebin ./deps/p1_pgsql/ebin ./deps/ranch/ebin ./deps/recon/ebin ./deps/rfc4627_jsonrpc/ebin -s ejb_http_server -smp enable -hidden -config ./config/lager -config ./config/ejb_http_server
 ```
 
 ### 安装java服务(/startalk/download/or_open/deps/tomcat/下的是打好包的三个java服务，自己也可以使用源码打包，然后自己部署)

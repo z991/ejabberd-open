@@ -158,13 +158,6 @@ check_permissions2(#request{auth = HTTPAuth, headers = Headers}, Call, _, ScopeL
                     _ ->
                         false
                 end;
-            {oauth, Token, _} ->
-                case oauth_check_token(ScopeList, Token) of
-                    {ok, user, {User, Server}} ->
-                        {ok, {User, Server, {oauth, Token}, Admin}};
-                    {false, Reason} ->
-                        {false, Reason}
-                end;
             _ ->
                 false
         end,
@@ -197,9 +190,6 @@ check_permissions2(#request{ip={IP, _Port}}, Call, _Policy, _Scope) ->
     end;
 check_permissions2(_Request, _Call, _Policy, _Scope) ->
     unauthorized_response().
-
-oauth_check_token(ScopeList, Token) when is_list(ScopeList) ->
-    ejabberd_oauth:check_token(ScopeList, Token).
 
 %% ------------------
 %% command processing

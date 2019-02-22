@@ -1,5 +1,6 @@
 doc/
 erl_crash.dump
+*.crashdump
 /deps/
 /logs/
 ebin/
@@ -7,14 +8,12 @@ cover/
 test/*.beam
 test/ct.cover.spec
 brod.d
-scripts/brod
 .brod.plt
 .erlang.mk
 *.coverdata
 ct.coverdata
 sys.config
 xrefr
-brod
 brod.plt
 _build/
 _rel/
@@ -24,3 +23,4 @@ rebar.lock
 *.testdata
 *.log
 relx
+docker/

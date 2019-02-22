@@ -2,42 +2,69 @@ language: erlang
 
 sudo: required
 
+services:
+  - docker
+
+# install latest rebar3 because the one travis provides doesn't support cover_export_name option
 before_install:
-  - sudo apt-key adv --keyserver hkp://p80.pool.sks-keyservers.net:80 --recv-keys 58118E89F3A912897C070ADBF76221572C52609D
-  - sudo sh -c "echo deb https://apt.dockerproject.org/repo ubuntu-precise main > /etc/apt/sources.list.d/docker.list"
-  - sudo apt-get update
-  - sudo apt-get install docker-engine
+  - git clone https://github.com/erlang/rebar3.git; cd rebar3; ./bootstrap; sudo mv rebar3 /usr/local/bin/; cd ..
+  - git clone https://github.com/inaka/elvis.git; cd elvis; rebar3 escriptize; sudo cp _build/default/bin/elvis /usr/bin; cd ..
   - sudo docker info
-  - curl -L https://github.com/docker/compose/releases/download/1.6.0/docker-compose-`uname -s`-`uname -m` > docker-compose
-  - chmod +x docker-compose
-  - sudo mv docker-compose /usr/local/bin/
-  - git clone https://github.com/erlang/rebar3.git; cd rebar3; ./bootstrap; sudo cp rebar3 /usr/bin; cd ..
 
 notifications:
   email: false
 
 otp_release:
-  - 18.2.1
-  - 17.5
+  - 21.0
+  - 20.3
+  - 19.3
 
 script:
-  - set -e
-  - make vsn-check
-  - scripts/line-width-check.sh
+  # check style first
+  - elvis rock
 
-  - echo "verifying rebar compilation"
+  # test compilation with rebar
   - rebar get-deps
   - rebar compile
 
+  # test with rebar3
   - make distclean
-  - echo "verifying rebar3 compilation"
   - rebar3 compile
 
-  - export BROD_CLI=true
   - make distclean
-  - make rel
-  - make edoc
-  - make xref
-  - make test-env
-  - make t
+  - rebar3 edoc
+  - rebar3 xref
+  - make brod-cli
+  - |
+    set -e
+    OTP_VSN=`erl -noshell -eval 'io:format(erlang:system_info(otp_release)), halt(0)'`
+    if [ $OTP_VSN -eq 21 ]; then
+      # run dialyzer only in otp 21
+      rebar3 dialyzer
+      # test against kafka 0.9 in otp 21
+      export KAFKA_VERSION="0.9"
+    fi
+    if [ $OTP_VSN -eq 20 ]; then
+      # test against kafka 0.10 in otp 20
+      export KAFKA_VERSION="0.10"
+    fi
+    if [ $OTP_VSN -eq 19 ]; then
+      # test against kafka 0.11 in otp 19
+      export KAFKA_VERSION="0.11"
+    fi
+    make test-env
+    _build/brod_cli/rel/brod/bin/brod meta -b localhost -L
+    make it
+    # final full test against kafka 1.1
+    export KAFKA_VERSION="1.1"
+    make test-env
+    make t
+    make cover
+
+after_success:
+  - |
+    OTP_VSN=`erl -noshell -eval 'io:format(erlang:system_info(otp_release)), halt(0)'`
+    if [ $OTP_VSN -eq 21 ]; then
+      make coveralls
+    fi
 

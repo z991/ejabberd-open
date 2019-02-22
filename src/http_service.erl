@@ -47,9 +47,7 @@ start(_Type, Args) ->
     ]),
     cowboy:stop_listener(http),
     Http_port = gen_mod:get_opt(http_port, Args, fun(A) -> A end, 10050),
-    {ok,_} = cowboy:start_http(http, 200, [{port,Http_port}], [
-        {env, [{dispatch, Dispatch},{max_connections, infinity}]}
-    ]).
+    {ok,_} = cowboy:start_clear(http, [{port,Http_port}], #{env => #{dispatch => Dispatch}}).
 
 stop(_State) ->
     ok.

@@ -1,9 +1,8 @@
 sudo: false
 language: erlang
-notifications:
-  email: eng@basho.com
 otp_release:
-  - 18.2.1
-  - 17.5
-  - R16B03-1
-  - R15B03
+  - 21.0
+  - 20.0
+  - 19.3
+  - 18.3
+  

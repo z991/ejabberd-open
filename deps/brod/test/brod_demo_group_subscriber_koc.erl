@@ -1,5 +1,5 @@
 %%%
-%%%   Copyright (c) 2016-2017 Klarna AB
+%%%   Copyright (c) 2016-2018 Klarna Bank AB (publ)
 %%%
 %%%   Licensed under the Apache License, Version 2.0 (the "License");
 %%%   you may not use this file except in compliance with the License.
@@ -21,7 +21,6 @@
 %%% it demos a all-configs-by-default minimal implenemtation of a
 %%% consumer group subscriber which commits offsets to kafka.
 %%% See bootstrap/0 for more details about all prerequisite.
-%%% @copyright 2016 Klarna AB
 %%% @end
 %%%=============================================================================
 
@@ -74,7 +73,6 @@
 %% synchronously, or dispatch it to any number of worker processes for
 %% concurrent processing, acks can be sent from the worker processes
 %% by calling brod_group_subscriber:ack/4
-%% @end
 -spec bootstrap() -> ok.
 bootstrap() ->
   bootstrap(?PRODUCE_DELAY_SECONDS).
@@ -104,7 +102,7 @@ bootstrap(DelaySeconds, MessageType) ->
   %% start one producer process for each partition to feed sequence numbers
   %% to kafka, then consumed by the group subscribers.
   ProducerClientId = ?MODULE,
-  ok = brod:start_client(BootstrapHosts, ProducerClientId, _ClientConfig = []),
+  ok = brod:start_client(BootstrapHosts, ProducerClientId, client_config()),
   ok = brod:start_producer(ProducerClientId, Topic, _ProducerConfig = []),
   {ok, PartitionCount} = brod:get_partitions_count(ProducerClientId, Topic),
   ok = spawn_producers(ProducerClientId, Topic, DelaySeconds, PartitionCount),
@@ -149,7 +147,7 @@ process_message(Topic, Partition, Handlers, Message) ->
 bootstrap_subscribers([], _BootstrapHosts, _GroupId, _Topics, _MsgType) -> ok;
 bootstrap_subscribers([ClientId | Rest], BootstrapHosts, GroupId,
                       Topics, MessageType) ->
-  ok = brod:start_client(BootstrapHosts, ClientId, _ClientConfig = []),
+  ok = brod:start_client(BootstrapHosts, ClientId, client_config()),
   %% commit offsets to kafka every 5 seconds
   GroupConfig = [{offset_commit_policy, commit_to_kafka_v2}
                 ,{offset_commit_interval_seconds, 1}
@@ -179,12 +177,11 @@ producer_loop(ClientId, Topic, Partition, DelaySeconds, Seqno) ->
   timer:sleep(timer:seconds(DelaySeconds)),
   producer_loop(ClientId, Topic, Partition, DelaySeconds, Seqno+1).
 
-%% @private Spawn one message handler per partition. Some of them may sit
+%% Spawn one message handler per partition. Some of them may sit
 %% idle if the partition is assigned to another group member.
 %% Perhaps hibernate if idle for certain minutes.
 %% Or even spawn dynamically in `handle_message` callback and
 %% `exit(normal)` when idle for long.
-%% @end
 -spec spawn_message_handlers(brod:client_id(), [brod:topic()]) ->
         [{{brod:topic(), brod:partition()}, pid()}].
 spawn_message_handlers(_ClientId, []) -> [];
@@ -218,6 +215,12 @@ os_time_utc_str() ->
   S = io_lib:format("~4.4.0w-~2.2.0w-~2.2.0w:~2.2.0w:~2.2.0w:~2.2.0w.~6.6.0w",
                     [Y, M, D, H, Min, Sec, Micro]),
   lists:flatten(S).
+
+client_config() ->
+  case os:getenv("KAFKA_VERSION") of
+    "0.9" ++ _ -> [{query_api_versions, false}];
+    _ -> []
+  end.
 
 %%%_* Emacs ====================================================================
 %%% Local Variables:

@@ -1,5 +1,5 @@
 %%%
-%%%   Copyright (c) 2016-2017 Klarna AB
+%%%   Copyright (c) 2016-2018 Klarna Bank AB (publ)
 %%%
 %%%   Licensed under the Apache License, Version 2.0 (the "License");
 %%%   you may not use this file except in compliance with the License.
@@ -20,7 +20,6 @@
 %%% This is called 'loc' as in 'Local Offset Commit'. i.e. it demos an
 %%% implementation of group subscriber that writes offsets locally (to file
 %%% in this module), but does not commit offsets to Kafka.
-%%% @copyright 2016 Klarna AB
 %%% @end
 %%%=============================================================================
 
@@ -31,6 +30,7 @@
 -export([ bootstrap/0
         , bootstrap/1
         , bootstrap/2
+        , bootstrap/3
         ]).
 
 %% behabviour callbacks
@@ -83,13 +83,15 @@ bootstrap(DelaySeconds) ->
   bootstrap(DelaySeconds, message).
 
 bootstrap(DelaySeconds, MessageType) ->
-  BootstrapHosts = [{"localhost", 9092}],
-  Topic = <<"brod-demo-group-subscriber-loc">>,
-  {ok, _} = application:ensure_all_started(brod),
-
   %% A group ID is to be shared between the members (which often run in
   %% different Erlang nodes or even hosts).
   GroupId = <<"brod-demo-group-subscriber-loc-consumer-group">>,
+  bootstrap(DelaySeconds, MessageType, GroupId).
+
+bootstrap(DelaySeconds, MessageType, GroupId) ->
+  BootstrapHosts = [{"localhost", 9092}],
+  Topic = <<"brod-demo-group-subscriber-loc">>,
+  {ok, _} = application:ensure_all_started(brod),
   %% Different members may subscribe to identical or different set of topics.
   %% In the assignments, a member receives only the partitions from the
   %% subscribed topic set.
@@ -104,7 +106,7 @@ bootstrap(DelaySeconds, MessageType) ->
   %% start one producer process for each partition to feed sequence numbers
   %% to kafka, then consumed by the group subscribers.
   ProducerClientId = ?MODULE,
-  ok = brod:start_client(BootstrapHosts, ProducerClientId, _ClientConfig = []),
+  ok = brod:start_client(BootstrapHosts, ProducerClientId, client_config()),
   ok = brod:start_producer(ProducerClientId, Topic, _ProducerConfig = []),
   {ok, PartitionCount} = brod:get_partitions_count(ProducerClientId, Topic),
   ok = spawn_producers(ProducerClientId, Topic, DelaySeconds, PartitionCount),
@@ -179,7 +181,7 @@ get_committed_offsets(GroupId, TopicPartitions,
 bootstrap_subscribers([], _BootstrapHosts, _GroupId, _Topics, _MsgType) -> ok;
 bootstrap_subscribers([ClientId | Rest], BootstrapHosts, GroupId,
                       Topics, MessageType) ->
-  ok = brod:start_client(BootstrapHosts, ClientId, _ClientConfig = []),
+  ok = brod:start_client(BootstrapHosts, ClientId, client_config()),
   %% commit offsets to kafka every 5 seconds
   GroupConfig = [{offset_commit_policy, consumer_managed}
                 ],
@@ -195,12 +197,11 @@ bootstrap_subscribers([ClientId | Rest], BootstrapHosts, GroupId,
 filename(Dir, GroupId, Topic, Partition) ->
   filename:join([Dir, GroupId, Topic, integer_to_list(Partition)]).
 
-%% @private Offsets are committed locally in files for demo.
+%% Offsets are committed locally in files for demo.
 %% Due to the fact that a partition can be assigned to any group member,
 %% in a real use case, when group members are distributed among Erlang nodes
 %% (or even hosts), the offsets should be committed to a place where all
 %% members have access to. e.g. a database.
-%% @end
 commit_offset(Dir, GroupId, Topic, Partition, Offset) ->
   Filename = filename(Dir, GroupId, Topic, Partition),
   ok = filelib:ensure_dir(Filename),
@@ -231,6 +232,12 @@ os_time_utc_str() ->
   S = io_lib:format("~4.4.0w-~2.2.0w-~2.2.0w:~2.2.0w:~2.2.0w:~2.2.0w.~6.6.0w",
                     [Y, M, D, H, Min, Sec, Micro]),
   lists:flatten(S).
+
+client_config() ->
+  case os:getenv("KAFKA_VERSION") of
+    "0.9" ++ _ -> [{query_api_versions, false}];
+    _ -> []
+  end.
 
 %%%_* Emacs ====================================================================
 %%% Local Variables:

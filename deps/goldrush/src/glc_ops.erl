@@ -21,6 +21,7 @@
 ]).
 
 -type op() ::
+    {atom(), '<', term()} |
     {atom(), '=<', term()} |
     {atom(), '=', term()} |
     {atom(), '!=', term()} |

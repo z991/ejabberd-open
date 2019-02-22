@@ -13,13 +13,13 @@
 start(_Type, _Args) ->
 	Dispatch = cowboy_router:compile([
 		{'_', [
-			{"/eventsource", eventsource_handler, []},
+			{"/eventsource", eventsource_h, []},
 			{"/", cowboy_static, {priv_file, eventsource, "index.html"}}
 		]}
 	]),
-	{ok, _} = cowboy:start_http(http, 100, [{port, 8080}], [
-		{env, [{dispatch, Dispatch}]}
-	]),
+	{ok, _} = cowboy:start_clear(http, [{port, 8080}], #{
+		env => #{dispatch => Dispatch}
+	}),
 	eventsource_sup:start_link().
 
 stop(_State) ->

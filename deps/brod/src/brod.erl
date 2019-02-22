@@ -1,5 +1,5 @@
 %%%
-%%%   Copyright (c) 2014-2017, Klarna AB
+%%%   Copyright (c) 2014-2018, Klarna Bank AB (publ)
 %%%
 %%%   Licensed under the Apache License, Version 2.0 (the "License");
 %%%   you may not use this file except in compliance with the License.
@@ -44,11 +44,17 @@
         , produce/2
         , produce/3
         , produce/5
+        , produce_cb/4
+        , produce_cb/6
         , produce_sync/2
         , produce_sync/3
         , produce_sync/5
+        , produce_sync_offset/5
+        , produce_no_ack/5
         , sync_produce_request/1
         , sync_produce_request/2
+        , sync_produce_request_offset/1
+        , sync_produce_request_offset/2
         ]).
 
 %% Simple Consumer API
@@ -79,8 +85,7 @@
         , resolve_offset/4
         , resolve_offset/5
         , fetch/4
-        , fetch/7
-        , fetch/8
+        , fetch/5
         , connect_leader/4
         , list_all_groups/2
         , list_groups/2
@@ -90,24 +95,36 @@
         , fetch_committed_offsets/3
         ]).
 
-%% escript
--ifdef(BROD_CLI).
+%% deprecated
+-export([ fetch/7
+        , fetch/8
+        ]).
+
+-deprecated([ {fetch, 7, next_version}
+            , {fetch, 8, next_version}
+            ]).
+
+
+-ifdef(build_brod_cli).
 -export([main/1]).
 -endif.
 
--export_type([ call_ref/0
+-export_type([ batch_input/0
+             , call_ref/0
              , cg/0
              , cg_protocol_type/0
              , client/0
              , client_config/0
              , client_id/0
              , compression/0
+             , connection/0
+             , conn_config/0
              , consumer_config/0
              , consumer_option/0
              , consumer_options/0
-             , corr_id/0
              , endpoint/0
              , error_code/0
+             , fetch_opts/0
              , group_config/0
              , group_generation_id/0
              , group_id/0
@@ -115,19 +132,22 @@
              , group_member_id/0
              , hostname/0
              , key/0
-             , kv_list/0
+             , msg_input/0
+             , msg_ts/0
              , message/0
+             , message_set/0
              , offset/0
              , offset_time/0
              , partition/0
              , partition_assignment/0
              , partition_fun/0
+             , partitioner/0
              , portnum/0
+             , produce_ack_cb/0
              , producer_config/0
              , produce_reply/0
              , produce_result/0
              , received_assignments/0
-             , sock_opts/0
              , topic/0
              , value/0
              ]).
@@ -143,9 +163,18 @@
 -type topic() :: kpro:topic().
 -type partition() :: kpro:partition().
 -type offset() :: kpro:offset().
--type key() :: kpro:key().
--type value() :: kpro:value().
--type kv_list() :: kpro:kv_list().
+-type key() :: undefined %% no key, transformed to <<>>
+             | binary().
+-type value() :: undefined %% no value, transformed to <<>>
+               | iodata() %% single value
+               | {msg_ts(), binary()} %% one message with timestamp
+               | kpro:msg_input() %% one magic v2 message
+               | kpro:batch_input(). %% maybe nested batch
+
+-type msg_input() :: kpro:msg_input().
+-type batch_input() :: [msg_input()].
+
+-type msg_ts() :: kpro:msg_ts().
 -type client_id() :: atom().
 -type client() :: client_id() | pid().
 -type client_config() :: brod_client:config().
@@ -153,13 +182,16 @@
                      | ?OFFSET_EARLIEST
                      | ?OFFSET_LATEST.
 -type message() :: kpro:message().
+-type message_set() :: #kafka_message_set{}.
 -type error_code() :: kpro:error_code().
 
 %% producers
 -type produce_reply() :: #brod_produce_reply{}.
 -type producer_config() :: brod_producer:config().
--type partition_fun() :: fun((topic(), partition(), key(), value()) ->
+-type partition_fun() :: fun((topic(), pos_integer(), key(), value()) ->
                                 {ok, partition()}).
+-type partitioner() :: partition_fun() | random | hash.
+-type produce_ack_cb() :: fun((partition(), offset()) -> _).
 -type compression() :: no_compression | gzip | snappy.
 -type call_ref() :: #brod_call_ref{}.
 -type produce_result() :: brod_produce_req_buffered
@@ -172,12 +204,17 @@
                          | max_bytes
                          | max_wait_time
                          | sleep_timeout
-                         | prefetch_count.
+                         | prefetch_count
+                         | prefetch_bytes
+                         | offset_reset_policy
+                         | size_stat_window.
 -type consumer_options() :: [{consumer_option(), integer()}].
 -type consumer_config() :: brod_consumer:config().
+-type connection() :: kpro:connection().
+-type conn_config() :: [{atom(), term()}] | kpro:conn_config().
 
 %% consumer groups
--type group_id() :: binary().
+-type group_id() :: kpro:group_id().
 -type group_member_id() :: binary().
 -type group_member() :: {group_member_id(), #kafka_group_member_metadata{}}.
 -type group_generation_id() :: non_neg_integer().
@@ -186,10 +223,7 @@
 -type received_assignments() :: [#brod_received_assignment{}].
 -type cg() :: #brod_cg{}.
 -type cg_protocol_type() :: binary().
-
-%% internals
--type corr_id() :: kpro:corr_id().
--type sock_opts() :: brod_sock:options().
+-type fetch_opts() :: kpro:fetch_opts().
 
 %%%_* APIs =====================================================================
 
@@ -221,52 +255,79 @@ start_client(BootstrapEndpoints, ClientId) ->
   start_client(BootstrapEndpoints, ClientId, []).
 
 %% @doc Start a client.
+%%
 %% BootstrapEndpoints:
 %%   Kafka cluster endpoints, can be any of the brokers in the cluster
 %%   which does not necessarily have to be a leader of any partition,
 %%   e.g. a load-balanced entrypoint to the remote kakfa cluster.
-%% ClientId:
-%%   Atom to identify the client process
-%% Config:
-%%   Proplist, possible values:
-%%     restart_delay_seconds (optional, default=10)
-%%       How much time to wait between attempts to restart brod_client
-%%       process when it crashes
-%%     max_metadata_sock_retry (optional, default=1)
-%%       Number of retries if failed fetching metadata due to socket error
-%%     get_metadata_timeout_seconds(optional, default=5)
-%%       Return timeout error from brod_client:get_metadata/2 in case the
-%%       respons is not received from kafka in this configured time.
-%%     reconnect_cool_down_seconds (optional, default=1)
-%%       Delay this configured number of seconds before retrying to
-%%       estabilish a new connection to the kafka partition leader.
-%%     allow_topic_auto_creation (optional, default=true)
-%%       By default, brod respects what is configured in broker about
-%%       topic auto-creation. i.e. whatever auto.create.topics.enable
-%%       is set in borker configuration.
-%%       However if 'allow_topic_auto_creation' is set to 'false' in client
-%%       config, brod will avoid sending metadata requests that may cause an
-%%       auto-creation of the topic regardless of what the broker config is.
-%%     auto_start_producers (optional, default=false)
-%%       If true, brod client will spawn a producer automatically when
-%%       user is trying to call 'produce' but did not call
-%%       brod:start_producer explicitly. Can be useful for applications
-%%       which don't know beforehand which topics they will be working with.
-%%     default_producer_config (optional, default=[])
-%%       Producer configuration to use when auto_start_producers is true.
-%%       @see brod_producer:start_link/4. for details about producer config
-%%     ssl (optional, default=false)
-%%       true | false | [{certfile, ...},{keyfile, ...},{cacertfile, ...}]
-%%       When true, brod will try to upgrade tcp connection to ssl using default
-%%       ssl options. List of ssl options implies ssl=true.
-%%     sasl (optional, default=undefined)
-%%       Credentials for SASL/Plain authentication.
-%%       {plain, "username", "password"}
-%%     connect_timeout (optional, default=5000)
-%%       Timeout when trying to connect to one endpoint.
-%%     request_timeout (optional, default=240000, constraint: >= 1000)
-%%       Timeout when waiting for a response, socket restart when timedout.
-%% @end
+%%
+%% ClientId: Atom to identify the client process.
+%%
+%% Config is a proplist, possible values:
+%%   restart_delay_seconds (optional, default=10)
+%%     How much time to wait between attempts to restart brod_client
+%%     process when it crashes
+%%
+%%   get_metadata_timeout_seconds (optional, default=5)
+%%     Return `{error, timeout}' from `brod_client:get_xxx' calls if
+%%     responses for APIs such as `metadata', `find_coordinator'
+%%     is not received in time.
+%%
+%%   reconnect_cool_down_seconds (optional, default=1)
+%%     Delay this configured number of seconds before retrying to
+%%     estabilish a new connection to the kafka partition leader.
+%%
+%%   allow_topic_auto_creation (optional, default=true)
+%%     By default, brod respects what is configured in broker about
+%%     topic auto-creation. i.e. whatever `auto.create.topics.enable'
+%%     is set in borker configuration.
+%%     However if `allow_topic_auto_creation' is set to `false' in client
+%%     config, brod will avoid sending metadata requests that may cause an
+%%     auto-creation of the topic regardless of what broker config is.
+%%
+%%   auto_start_producers (optional, default=false)
+%%     If true, brod client will spawn a producer automatically when
+%%     user is trying to call `produce' but did not call `brod:start_producer'
+%%     explicitly. Can be useful for applications which don't know beforehand
+%%     which topics they will be working with.
+%%
+%%   default_producer_config (optional, default=[])
+%%     Producer configuration to use when auto_start_producers is true.
+%%     @see brod_producer:start_link/4. for details about producer config
+%%
+%% Connection config entries can be added in the same proplist.
+%% see `kpro_connection.erl' in `kafka_protocol' for more details.
+%%
+%%   ssl (optional, default=false)
+%%     `true | false | ssl:ssl_option()'
+%%     `true' is translated to `[]' as `ssl:ssl_option()' i.e. all default.
+%%
+%%   sasl (optional, default=undefined)
+%%     Credentials for SASL/Plain authentication.
+%%     `{mechanism(), Filename}' or `{mechanism(), UserName, Password}'
+%%     where mechanism can be atoms: plain (for "PLAIN"), scram_sha_256
+%%     (for "SCRAM-SHA-256") or scram_sha_512 (for SCRAM-SHA-512).
+%%     `Filename' should be a file consisting two lines, first line
+%%     is the username and second line is the password.
+%%     `Username', `Password' should be `string() | binary()'
+%%
+%%   connect_timeout (optional, default=5000)
+%%     Timeout when trying to connect to an endpoint.
+%%
+%%   request_timeout (optional, default=240000, constraint: >= 1000)
+%%     Timeout when waiting for a response, connection restart when timed out.
+%%   query_api_versions (optional, default=true)
+%%     Must be set to false to work with kafka versions prior to 0.10,
+%%     When set to `true', at connection start, brod will send a query request
+%%     to get the broker supported API version ranges.
+%%     When set to 'false', brod will alway use the lowest supported API version
+%%     when sending requests to kafka.
+%%     Supported API version ranges can be found in:
+%%     `brod_kafka_apis:supported_versions/1'
+%%  extra_sock_opts (optional, default=[])
+%%     Extra socket options to tune socket performance.
+%%     e.g. [{sndbuf, 1 bsl 20}].
+%%     ref: http://erlang.org/doc/man/gen_tcp.html#type-option
 -spec start_client([endpoint()], client_id(), client_config()) ->
                       ok | {error, any()}.
 start_client(BootstrapEndpoints, ClientId, Config) ->
@@ -304,7 +365,6 @@ stop_client(Client) when is_pid(Client) ->
 
 %% @doc Dynamically start a per-topic producer.
 %% @see brod_producer:start_link/4. for details about producer config.
-%% @end
 -spec start_producer(client(), topic(), producer_config()) ->
                         ok | {error, any()}.
 start_producer(Client, TopicName, ProducerConfig) ->
@@ -312,7 +372,6 @@ start_producer(Client, TopicName, ProducerConfig) ->
 
 %% @doc Dynamically start a topic consumer.
 %% @see brod_consumer:start_link/5. for details about consumer config.
-%% @end
 -spec start_consumer(client(), topic(), consumer_config()) ->
                         ok | {error, any()}.
 start_consumer(Client, TopicName, ConsumerConfig) ->
@@ -324,7 +383,6 @@ start_consumer(Client, TopicName, ConsumerConfig) ->
 %% is not statically configured for them.
 %% It is up to the callers how they want to distribute their data
 %% (e.g. random, roundrobin or consistent-hashing) to the partitions.
-%% @end
 -spec get_partitions_count(client(), topic()) ->
         {ok, pos_integer()} | {error, any()}.
 get_partitions_count(Client, Topic) ->
@@ -355,38 +413,107 @@ produce(Pid, Value) ->
   produce(Pid, _Key = <<>>, Value).
 
 %% @doc Produce one message if Value is binary or iolist,
-%% or a message set if Value is a (nested) kv-list, in this case Key
-%% is discarded (only the keys in kv-list are sent to kafka).
+%% Or send a batch if Value is a (nested) kv-list or a list of maps,
+%% in this case Key is discarded (only the keys in kv-list are sent to kafka).
 %% The pid should be a partition producer pid, NOT client pid.
-%% @end
+%% The return value is a call reference of type `call_ref()',
+%% so the caller can used it to expect (match) a
+%% `#brod_produce_reply{result = brod_produce_req_acked}'
+%% message after the produce request has been acked by kafka.
 -spec produce(pid(), key(), value()) ->
         {ok, call_ref()} | {error, any()}.
 produce(ProducerPid, Key, Value) ->
   brod_producer:produce(ProducerPid, Key, Value).
 
 %% @doc Produce one message if Value is binary or iolist,
-%% or a message set if Value is a (nested) kv-list, in this case Key
-%% is used only for partitioning (or discarded if Partition is used
-%% instead of PartFun).
+%% Or send a batch if Value is a (nested) kv-list or a list of maps,
+%% in this case Key is used only for partitioning, or discarded if the 3rd
+%% arg is a partition number instead of a partitioner callback.
 %% This function first lookup the producer pid,
-%% then call produce/3 to do the real work.
-%% @end
--spec produce(client(), topic(), partition() | partition_fun(),
+%% then call `produce/3' to do the real work.
+%% The return value is a call reference of type `call_ref()',
+%% so the caller can used it to expect (match) a
+%% `#brod_produce_reply{result = brod_produce_req_acked}'
+%% message after the produce request has been acked by kafka.
+-spec produce(client(), topic(), partition() | partitioner(),
               key(), value()) -> {ok, call_ref()} | {error, any()}.
-produce(Client, Topic, PartFun, Key, Value) when is_function(PartFun) ->
+produce(Client, Topic, Partition, Key, Value) when is_integer(Partition) ->
+  case get_producer(Client, Topic, Partition) of
+    {ok, Pid} -> produce(Pid, Key, Value);
+    {error, Reason} -> {error, Reason}
+  end;
+produce(Client, Topic, Partitioner, Key, Value) ->
+  PartFun = brod_utils:make_part_fun(Partitioner),
   case brod_client:get_partitions_count(Client, Topic) of
     {ok, PartitionsCnt} ->
       {ok, Partition} = PartFun(Topic, PartitionsCnt, Key, Value),
       produce(Client, Topic, Partition, Key, Value);
     {error, Reason} ->
       {error, Reason}
-  end;
-produce(Client, Topic, Partition, Key, Value) when is_integer(Partition) ->
-  case get_producer(Client, Topic, Partition) of
-    {ok, Pid}       -> produce(Pid, Key, Value);
-    {error, Reason} -> {error, Reason}
   end.
 
+%% @doc Same as `produce/3' only the ack is not delivered as a message,
+%% instead, the callback is evaluated by producer worker when ack is received
+%% from kafka.
+-spec produce_cb(pid(), key(), value(), produce_ack_cb()) ->
+        ok | {error, any()}.
+produce_cb(ProducerPid, Key, Value, AckCb) ->
+  brod_producer:produce_cb(ProducerPid, Key, Value, AckCb).
+
+%% @doc Same as `produce/5' only the ack is not delivered as a message,
+%% instead, the callback is evaluated by producer worker when ack is received
+%% from kafka. Return the partition to caller as `{ok, Partition}' for caller
+%% to correlate the callback when the 3rd arg is not a partition number.
+-spec produce_cb(client(), topic(), partition() | partitioner(),
+                 key(), value(), produce_ack_cb()) ->
+        ok | {ok, partition()} | {error, any()}.
+produce_cb(Client, Topic, Part, Key, Value, AckCb) when is_integer(Part) ->
+  case get_producer(Client, Topic, Part) of
+    {ok, Pid} -> produce_cb(Pid, Key, Value, AckCb);
+    {error, Reason} -> {error, Reason}
+  end;
+produce_cb(Client, Topic, Partitioner, Key, Value, AckCb) ->
+  PartFun = brod_utils:make_part_fun(Partitioner),
+  case brod_client:get_partitions_count(Client, Topic) of
+    {ok, PartitionsCnt} ->
+      {ok, Partition} = PartFun(Topic, PartitionsCnt, Key, Value),
+      case produce_cb(Client, Topic, Partition, Key, Value, AckCb) of
+        ok -> {ok, Partition};
+        {error, Reason} -> {error, Reason}
+      end;
+    {error, Reason} ->
+      {error, Reason}
+  end.
+
+%% @doc Send the message to partition worker without any ack.
+%% NOTE: This call has no back-pressure to the caller,
+%%       excessive usage may cause beam to run out of memory.
+-spec produce_no_ack(pid(), key(), value()) -> ok | {error, any()}.
+produce_no_ack(ProducerPid, Key, Value) ->
+  brod_producer:produce_no_ack(ProducerPid, Key, Value).
+
+%% @doc Find the partition worker and send message without any ack.
+%% NOTE: This call has no back-pressure to the caller,
+%%       excessive usage may cause beam to run out of memory.
+-spec produce_no_ack(client(), topic(), partition() | partitioner(),
+           key(), value()) -> ok | {error, any()}.
+produce_no_ack(Client, Topic, Part, Key, Value) when is_integer(Part) ->
+  case get_producer(Client, Topic, Part) of
+    {ok, Pid} -> produce_no_ack(Pid, Key, Value);
+    {error, Reason} -> {error, Reason}
+  end;
+produce_no_ack(Client, Topic, Partitioner, Key, Value) ->
+  PartFun = brod_utils:make_part_fun(Partitioner),
+  case brod_client:get_partitions_count(Client, Topic) of
+    {ok, PartitionsCnt} ->
+      {ok, Partition} = PartFun(Topic, PartitionsCnt, Key, Value),
+      produce_no_ack(Client, Topic, Partition, Key, Value);
+    {error, _Reason} ->
+      %% error ignored
+      ok
+  end.
+
+%% @doc Same as `produce/5' only the ack is not d
 %% @equiv produce_sync(Pid, 0, <<>>, Value)
 -spec produce_sync(pid(), value()) -> ok.
 produce_sync(Pid, Value) ->
@@ -396,7 +523,6 @@ produce_sync(Pid, Value) ->
 %% This function will not return until a response is received from kafka,
 %% however if producer is started with required_acks set to 0, this function
 %% will return onece the messages is buffered in the producer process.
-%% @end
 -spec produce_sync(pid(), key(), value()) ->
         ok | {error, any()}.
 produce_sync(Pid, Key, Value) ->
@@ -412,13 +538,23 @@ produce_sync(Pid, Key, Value) ->
 %% This function will not return until a response is received from kafka,
 %% however if producer is started with required_acks set to 0, this function
 %% will return once the messages are buffered in the producer process.
-%% @end
--spec produce_sync(client(), topic(), partition() | partition_fun(),
+-spec produce_sync(client(), topic(), partition() | partitioner(),
                    key(), value()) -> ok | {error, any()}.
 produce_sync(Client, Topic, Partition, Key, Value) ->
+  case produce_sync_offset(Client, Topic, Partition, Key, Value) of
+    {ok, _} -> ok;
+    Else -> Else
+  end.
+
+%% @doc Version of produce_sync/5 that returns the offset assigned by Kafka
+%% If producer is started with required_acks set to 0, the offset will be
+%% `?BROD_PRODUCE_UNKNOWN_OFFSET'.
+-spec produce_sync_offset(client(), topic(), partition() | partitioner(),
+                          key(), value()) -> {ok, offset()} | {error, any()}.
+produce_sync_offset(Client, Topic, Partition, Key, Value) ->
   case produce(Client, Topic, Partition, Key, Value) of
     {ok, CallRef} ->
-      sync_produce_request(CallRef);
+      sync_produce_request_offset(CallRef);
     {error, Reason} ->
       {error, Reason}
   end.
@@ -429,13 +565,25 @@ produce_sync(Client, Topic, Partition, Key, Value) ->
 sync_produce_request(CallRef) ->
   sync_produce_request(CallRef, infinity).
 
--spec sync_produce_request(call_ref(), infinity | timeout()) ->
+-spec sync_produce_request(call_ref(), timeout()) ->
         ok | {error, Reason :: any()}.
 sync_produce_request(CallRef, Timeout) ->
-  Expect = #brod_produce_reply{ call_ref = CallRef
-                              , result   = brod_produce_req_acked
-                              },
-  brod_producer:sync_produce_request(Expect, Timeout).
+  case sync_produce_request_offset(CallRef, Timeout) of
+    {ok, _} -> ok;
+    Else -> Else
+  end.
+
+%% @doc As sync_produce_request_offset/1, but also returning assigned offset
+%% See produce_sync_offset/5.
+-spec sync_produce_request_offset(call_ref()) ->
+        {ok, offset()} | {error, Reason :: any()}.
+sync_produce_request_offset(CallRef) ->
+  sync_produce_request_offset(CallRef, infinity).
+
+-spec sync_produce_request_offset(call_ref(), timeout()) ->
+        {ok, offset()} | {error, Reason :: any()}.
+sync_produce_request_offset(CallRef, Timeout) ->
+  brod_producer:sync_produce_request(CallRef, Timeout).
 
 %% @doc Subscribe data stream from the given topic-partition.
 %% If {error, Reason} is returned, the caller should perhaps retry later.
@@ -449,7 +597,6 @@ sync_produce_request(CallRef, Timeout) ->
 %% -include_lib(brod/include/brod.hrl) to access the records.
 %% In case #kafka_fetch_error{} is received the subscriber should re-subscribe
 %% itself to resume the data stream.
-%% @end
 -spec subscribe(client(), pid(), topic(), partition(),
                 consumer_options()) -> {ok, pid()} | {error, any()}.
 subscribe(Client, SubscriberPid, Topic, Partition, Options) ->
@@ -515,7 +662,7 @@ start_link_group_subscriber(Client, GroupId, Topics, GroupConfig,
 %% @equiv brod_group_subscriber:start_link/8
 -spec start_link_group_subscriber(
         client(), group_id(), [topic()], group_config(),
-        consumer_config(), message | message_type,
+        consumer_config(), message | message_set,
         module(), term()) ->
           {ok, pid()} | {error, any()}.
 start_link_group_subscriber(Client, GroupId, Topics, GroupConfig,
@@ -560,136 +707,149 @@ start_link_topic_subscriber(Client, Topic, Partitions,
                                    CbModule, CbInitArg).
 
 %% @doc Fetch broker metadata
-%% Return the message body of metadata_response.
-%% See kpro_schema.erl for details
-%% @end
+%% Return the message body of `metadata' response.
+%% See `kpro_schema.erl' for details
 -spec get_metadata([endpoint()]) -> {ok, kpro:struct()} | {error, any()}.
 get_metadata(Hosts) ->
   brod_utils:get_metadata(Hosts).
 
-%% @doc Fetch broker metadata
-%% Return the message body of metadata_response.
+%% @doc Fetch broker/topic metadata
+%% Return the message body of `metadata' response.
 %% See `kpro_schema.erl' for struct details
-%% @end
--spec get_metadata([endpoint()], [topic()]) ->
+-spec get_metadata([endpoint()], all | [topic()]) ->
         {ok, kpro:struct()} | {error, any()}.
 get_metadata(Hosts, Topics) ->
   brod_utils:get_metadata(Hosts, Topics).
 
-%% @doc Fetch broker metadata
-%% Return the message body of metadata_response.
+%% @doc Fetch broker/topic metadata
+%% Return the message body of `metadata' response.
 %% See `kpro_schema.erl' for struct details
-%% @end
--spec get_metadata([endpoint()], [topic()], sock_opts()) ->
+-spec get_metadata([endpoint()], all | [topic()], conn_config()) ->
         {ok, kpro:struct()} | {error, any()}.
 get_metadata(Hosts, Topics, Options) ->
   brod_utils:get_metadata(Hosts, Topics, Options).
 
 %% @equiv resolve_offset(Hosts, Topic, Partition, latest, 1)
 -spec resolve_offset([endpoint()], topic(), partition()) ->
-        {ok, [offset()]} | {error, any()}.
+        {ok, offset()} | {error, any()}.
 resolve_offset(Hosts, Topic, Partition) ->
   resolve_offset(Hosts, Topic, Partition, ?OFFSET_LATEST).
 
 %% @doc Resolve semantic offset or timestamp to real offset.
 -spec resolve_offset([endpoint()], topic(), partition(), offset_time()) ->
-        {ok, [offset()]} | {error, any()}.
+        {ok, offset()} | {error, any()}.
 resolve_offset(Hosts, Topic, Partition, Time) ->
   resolve_offset(Hosts, Topic, Partition, Time, []).
 
 %% @doc Resolve semantic offset or timestamp to real offset.
 -spec resolve_offset([endpoint()], topic(), partition(),
-                     offset_time(), sock_opts()) ->
-        {ok, [offset()]} | {error, any()}.
-resolve_offset(Hosts, Topic, Partition, Time, Options) when is_list(Options) ->
-  brod_utils:resolve_offset(Hosts, Topic, Partition, Time, Options).
+                     offset_time(), conn_config()) ->
+        {ok, offset()} | {error, any()}.
+resolve_offset(Hosts, Topic, Partition, Time, ConnCfg) ->
+  brod_utils:resolve_offset(Hosts, Topic, Partition, Time, ConnCfg).
 
-%% @equiv fetch(Hosts, Topic, Partition, Offset, 1000, 0, 100000)
--spec fetch([endpoint()], topic(), partition(), integer()) ->
-               {ok, [#kafka_message{}]} | {error, any()}.
-fetch(Hosts, Topic, Partition, Offset) ->
-  fetch(Hosts, Topic, Partition, Offset,
-        _MaxWaitTime = 1000, _MinBytes = 0, _MaxBytes = 100000).
+%% @doc Fetch a single message set from the given topic-partition.
+%% The first arg can either be an already established connection to leader,
+%% or `{Endpoints, ConnConfig}' so to establish a new connection before fetch.
+-spec fetch(connection() | [endpoint()] | {[endpoint()], conn_config()},
+            topic(), partition(), integer()) ->
+              {ok, {HwOffset :: offset(), [message()]}} | {error, any()}.
+fetch(ConnOrBootstrap, Topic, Partition, Offset) ->
+  Opts = #{ max_wait_time => 1000
+          , min_bytes => 1
+          , max_bytes => 1 bsl 20
+          },
+  fetch(ConnOrBootstrap, Topic, Partition, Offset, Opts).
 
-%% @equiv fetch(Hosts, Topic, Partition, Offset, Wait, MinBytes, MaxBytes, [])
+%% @doc Fetch a single message set from the given topic-partition.
+%% The first arg can either be an already established connection to leader,
+%% or `{Endpoints, ConnConfig}' so to establish a new connection before fetch.
+-spec fetch(connection() | {[endpoint()], conn_config()},
+            topic(), partition(), offset(), fetch_opts()) ->
+              {ok, {HwOffset :: offset(), [message()]}} | {error, any()}.
+fetch(Hosts, Topic, Partition, Offset, Opts) when is_list(Hosts) ->
+  fetch({Hosts, _ConnConfig = []}, Topic, Partition, Offset, Opts);
+fetch(ConnOrBootstrap, Topic, Partition, Offset, Opts) ->
+  brod_utils:fetch(ConnOrBootstrap, Topic, Partition, Offset, Opts).
+
+%% @deprecated
+%% fetch(Hosts, Topic, Partition, Offset, Wait, MinBytes, MaxBytes, [])
 -spec fetch([endpoint()], topic(), partition(), offset(),
             non_neg_integer(), non_neg_integer(), pos_integer()) ->
-               {ok, [#kafka_message{}]} | {error, any()}.
+               {ok, [message()]} | {error, any()}.
 fetch(Hosts, Topic, Partition, Offset, MaxWaitTime, MinBytes, MaxBytes) ->
   fetch(Hosts, Topic, Partition, Offset, MaxWaitTime, MinBytes, MaxBytes, []).
 
-%% @doc Fetch a single message set from the given topic-partition.
+%% @deprecated Fetch a single message set from the given topic-partition.
 -spec fetch([endpoint()], topic(), partition(), offset(),
             non_neg_integer(), non_neg_integer(), pos_integer(),
-            sock_opts()) -> {ok, [#kafka_message{}]} | {error, any()}.
+            conn_config()) -> {ok, [message()]} | {error, any()}.
 fetch(Hosts, Topic, Partition, Offset,
-      MaxWaitTime, MinBytes, MaxBytes, Options) ->
-  brod_utils:fetch(Hosts, Topic, Partition, Offset,
-                   MaxWaitTime, MinBytes, MaxBytes, Options).
+      MaxWaitTime, MinBytes, MaxBytes, ConnConfig) ->
+  FetchOpts = #{ max_wait_time => MaxWaitTime
+               , min_bytes => MinBytes
+               , max_bytes => MaxBytes
+               },
+  case fetch({Hosts, ConnConfig}, Topic, Partition, Offset, FetchOpts) of
+    {ok, {_HwOffset, Batch}} -> {ok, Batch}; %% backward compatible
+    {error, Reason} -> {error, Reason}
+  end.
 
 %% @doc Connect partition leader.
 -spec connect_leader([endpoint()], topic(), partition(),
-                     sock_opts()) -> {ok, pid()}.
-connect_leader(Hosts, Topic, Partition, Options) ->
-  {ok, Metadata} = get_metadata(Hosts, [Topic], Options),
-  {ok, {Host, Port}} =
-    brod_utils:find_leader_in_metadata(Metadata, Topic, Partition),
-  %% client id matters only for producer clients
-  brod_sock:start_link(self(), Host, Port, ?BROD_DEFAULT_CLIENT_ID, Options).
+                     conn_config()) -> {ok, pid()}.
+connect_leader(Hosts, Topic, Partition, ConnConfig) ->
+  kpro:connect_partition_leader(Hosts, ConnConfig, Topic, Partition).
 
 %% @doc List ALL consumer groups in the given kafka cluster.
-%% NOTE: Exception if failed against any of the coordinator brokers.
-%% @end
--spec list_all_groups([endpoint()], sock_opts()) ->
+%% NOTE: Exception if failed to connect any of the coordinator brokers.
+-spec list_all_groups([endpoint()], conn_config()) ->
         [{endpoint(), [cg()] | {error, any()}}].
-list_all_groups(Hosts, Options) ->
-  brod_utils:list_all_groups(Hosts, Options).
+list_all_groups(Endpoints, ConnCfg) ->
+  brod_utils:list_all_groups(Endpoints, ConnCfg).
 
 %% @doc List consumer groups in the given group coordinator broker.
--spec list_groups(endpoint(), sock_opts()) -> {ok, [cg()]} | {error, any()}.
-list_groups(Hosts, Options) ->
-  brod_utils:list_groups(Hosts, Options).
+-spec list_groups(endpoint(), conn_config()) -> {ok, [cg()]} | {error, any()}.
+list_groups(CoordinatorEndpoint, ConnCfg) ->
+  brod_utils:list_groups(CoordinatorEndpoint, ConnCfg).
 
 %% @doc Describe consumer groups. The given consumer group IDs should be all
 %% managed by the coordinator-broker running at the given endpoint.
 %% Otherwise error codes will be returned in the result structs.
-%% Return `describe_groups_response' response body field named `groups'.
+%% Return `describe_groups' response body field named `groups'.
 %% See `kpro_schema.erl' for struct details
-%% @end
--spec describe_groups(endpoint(), sock_opts(), [group_id()]) ->
+-spec describe_groups(endpoint(), conn_config(), [group_id()]) ->
         {ok, [kpro:struct()]} | {error, any()}.
-describe_groups(CoordinatorEndpoint, SockOpts, IDs) ->
-  brod_utils:describe_groups(CoordinatorEndpoint, SockOpts, IDs).
+describe_groups(CoordinatorEndpoint, ConnCfg, IDs) ->
+  brod_utils:describe_groups(CoordinatorEndpoint, ConnCfg, IDs).
 
 %% @doc Connect to consumer group coordinator broker.
 %% Done in steps: 1) connect to any of the given bootstrap ednpoints;
 %% 2) send group_coordinator_request to resolve group coordinator endpoint;;
-%% 3) connect to the resolved endpoint and return the brod_sock pid
-%% @end
--spec connect_group_coordinator([endpoint()], sock_opts(), group_id()) ->
+%% 3) connect to the resolved endpoint and return the connection pid
+-spec connect_group_coordinator([endpoint()], conn_config(), group_id()) ->
         {ok, pid()} | {error, any()}.
-connect_group_coordinator(BootstrapEndpoints, SockOpts, GroupId) ->
-  brod_utils:connect_group_coordinator(BootstrapEndpoints, SockOpts, GroupId).
+connect_group_coordinator(BootstrapEndpoints, ConnCfg, GroupId) ->
+  Args = #{type => group, id => GroupId},
+  kpro:connect_coordinator(BootstrapEndpoints, ConnCfg, Args).
 
 %% @doc Fetch committed offsets for ALL topics in the given consumer group.
-%% Return the `responses' field of the `offset_fetch_response' response.
+%% Return the `responses' field of the `offset_fetch' response.
 %% See `kpro_schema.erl' for struct details.
-%% @end
--spec fetch_committed_offsets([endpoint()], sock_opts(), group_id()) ->
+-spec fetch_committed_offsets([endpoint()], conn_config(), group_id()) ->
         {ok, [kpro:struct()]} | {error, any()}.
-fetch_committed_offsets(BootstrapEndpoints, SockOpts, GroupId) ->
-  brod_utils:fetch_committed_offsets(BootstrapEndpoints, SockOpts, GroupId).
+fetch_committed_offsets(BootstrapEndpoints, ConnCfg, GroupId) ->
+  brod_utils:fetch_committed_offsets(BootstrapEndpoints, ConnCfg, GroupId, []).
 
-%% @doc Same as `fetch_committed_offsets/3', only work on the socket
-%% connected to the group coordinator broker.
-%% @end
--spec fetch_committed_offsets(pid(), group_id()) ->
+%% @doc Same as `fetch_committed_offsets/3',
+%% but works with a started `brod_client'
+-spec fetch_committed_offsets(client(), group_id()) ->
         {ok, [kpro:struct()]} | {error, any()}.
-fetch_committed_offsets(SockPid, GroupId) ->
-  brod_utils:fetch_committed_offsets(SockPid, GroupId).
+fetch_committed_offsets(Client, GroupId) ->
+  brod_utils:fetch_committed_offsets(Client, GroupId, []).
 
--ifdef(BROD_CLI).
-main(Args) -> brod_cli:main(Args, halt).
+-ifdef(build_brod_cli).
+main(X) -> brod_cli:main(X).
 -endif.
 
 %%%_* Emacs ====================================================================

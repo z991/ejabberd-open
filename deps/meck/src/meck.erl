@@ -1,5 +1,5 @@
 %%%============================================================================
-%%% Copyright 2011 Adam Lindberg & Erlang Solutions Ltd.
+%%% Copyright 2010-2017 Adam Lindberg, 2010-2011 Erlang Solutions Ltd
 %%%
 %%% Licensed under the Apache License, Version 2.0 (the "License");
 %%% you may not use this file except in compliance with the License.
@@ -15,7 +15,7 @@
 %%%============================================================================
 
 %%% @author Adam Lindberg <eproxus@gmail.com>
-%%% @copyright 2011, Adam Lindberg & Erlang Solutions Ltd
+%%% @copyright 2010-2017 Adam Lindberg, 2010-2011 Erlang Solutions Ltd
 %%% @doc Module mocking library for Erlang.
 
 -module(meck).
@@ -34,6 +34,9 @@
 -export([sequence/4]).
 -export([loop/4]).
 -export([delete/3]).
+-export([delete/4]).
+-export([expects/1]).
+-export([expects/2]).
 -export([exception/2]).
 -export([passthrough/1]).
 -export([history/1]).
@@ -173,7 +176,7 @@ new(Mod) when is_list(Mod) -> lists:foreach(fun new/1, Mod), ok.
 %%
 %%   <dt>`non_strict'</dt>
 %%   <dd>A mock created with this option will allow setting expectations on
-%%       functions that are not exported from the mocked module. With this
+%%       functions that does not exist in the mocked module. With this
 %%       option on it is even possible to mock non existing modules.</dd>
 %%
 %%   <dt>`{stub_all, '{@link ret_spec()}`}'</dt>
@@ -182,7 +185,30 @@ new(Mod) when is_list(Mod) -> lists:foreach(fun new/1, Mod), ok.
 %%       passed in. It is possible to specify this option as just `stub_all'
 %%       then stubs will return atom `ok'. If used along with `passthrough'
 %%       then `stub_all' is ignored. </dd>
+%%
+%%   <dt>`merge_expects'</dt>
+%%   <dd>The expectations for the function/arity signature are merged with
+%%       existing ones instead of replacing all of them each time an
+%%       expectation is added. Expectations are added to the end of the
+%%       function clause list, meaning that pattern matching will be performed
+%%       in the order the expectations were added.</dd>
 %% </dl>
+%%
+%% Possible exceptions:
+%% <dl>
+%%   <dt>`error:{undefined_module, Mod}'</dt>
+%%   <dd>The module to be mocked does not exist. This error exists to prevent
+%%       mocking of misspelled module names. To bypass this and create a new
+%%       mocked module anyway, use the option `non_strict'.</dd>
+%%   <dt>`error:{module_is_sticky, Mod}'</dt>
+%%   <dd>The module to be mocked resides in a sticky directory. To unstick the
+%%       module and mock it anyway, use the option `unstick'.</dd>
+%%   <dt>`error:{abstract_code_not_found, Mod}'</dt>
+%%   <dd>The option `passthrough' was used but the original module has no
+%%       abstract code which can be called. Make sure the module is compiled
+%%       with the compiler option `debug_info'.</dd>
+%% </dl>
+
 -spec new(Mods, Options) -> ok when
       Mods :: Mod | [Mod],
       Mod :: atom(),
@@ -282,17 +308,60 @@ loop(Mod, Func, Ari, Loop) when is_list(Mod) ->
 %%
 %% Deletes the expectation for the function `Func' with the matching
 %% arity `Arity'.
+%% `Force' is a flag to delete the function even if it is passthrough.
+-spec delete(Mods, Func, Ari, Force) -> ok when
+      Mods :: Mod | [Mod],
+      Mod :: atom(),
+      Func :: atom(),
+      Ari :: byte(),
+      Force :: boolean().
+delete(Mod, Func, Ari, Force)
+  when is_atom(Mod), is_atom(Func), Ari >= 0 ->
+    meck_proc:delete_expect(Mod, Func, Ari, Force);
+delete(Mod, Func, Ari, Force) when is_list(Mod) ->
+    lists:foreach(fun(M) -> delete(M, Func, Ari, Force) end, Mod),
+    ok.
+
+%% @doc Deletes an expectation.
+%%
+%% Deletes the expectation for the function `Func' with the matching
+%% arity `Arity'.
+%% If the mock has passthrough enabled, this function restores the
+%% expectation to the original function. See {@link delete/4}.
 -spec delete(Mods, Func, Ari) -> ok when
       Mods :: Mod | [Mod],
       Mod :: atom(),
       Func :: atom(),
       Ari :: byte().
-delete(Mod, Func, Ari)
-  when is_atom(Mod), is_atom(Func), Ari >= 0 ->
-    meck_proc:delete_expect(Mod, Func, Ari);
-delete(Mod, Func, Ari) when is_list(Mod) ->
-    lists:foreach(fun(M) -> delete(M, Func, Ari) end, Mod),
-    ok.
+delete(Mod, Func, Ari) ->
+    delete(Mod, Func, Ari, false).
+
+%% @doc Returns the list of expectations.
+%%
+%% Returns the list of MFAs that were replaced by expectations
+%% If `ExcludePassthrough' is on, only expectations that are not
+%% direct passthroughs are returned
+-spec expects(Mods, ExcludePassthrough) -> [{Mod, Func, Ari}] when
+      Mods :: Mod | [Mod],
+      Mod :: atom(),
+      Func :: atom(),
+      Ari :: byte(),
+      ExcludePassthrough :: boolean().
+expects(Mod, ExcludePassthrough) when is_atom(Mod) ->
+    meck_proc:list_expects(Mod, ExcludePassthrough);
+expects(Mods, ExcludePassthrough) when is_list(Mods) ->
+    [Expect || Mod <- Mods, Expect <- expects(Mod, ExcludePassthrough)].
+
+%% @doc Returns the list of expectations.
+%%
+%% Returns the list of MFAs that were replaced by expectations
+-spec expects(Mods) -> [{Mod, Func, Ari}] when
+      Mods :: Mod | [Mod],
+      Mod :: atom(),
+      Func :: atom(),
+      Ari :: byte().
+expects(Mod) ->
+    expects(Mod, false).
 
 %% @doc Throws an expected exception inside an expect fun.
 %%
@@ -324,6 +393,31 @@ passthrough(Args) when is_list(Args) ->
 %% failed in some way. Reasons for failure are wrong number of
 %% arguments or non-existing function (undef), wrong arguments
 %% (function clause) or unexpected exceptions.
+%%
+%% Validation can detect:
+%%
+%% <ul>
+%%   <li>When a function was called with the wrong argument types
+%%       (`function_clause')</li>
+%%   <li>When an exception was thrown</li>
+%%   <li>When an exception was thrown and expected (via meck:exception/2),
+%%       which still results in `true' being returned</li>
+%% </ul>
+%%
+%% Validation cannot detect:
+%%
+%% <ul>
+%%   <li>When you didn't call a function</li>
+%%   <li>When you called a function with the wrong number of arguments
+%%       (`undef')</li>
+%%   <li>When you called an undefined function (`undef')</li>
+%% </ul>
+%%
+%% The reason Meck cannot detect these cases is because of how it is implemented.
+%% Meck replaces the module with a mock and a process that maintains the mock.
+%% Everything Meck get goes through that mock module. Meck does not insert
+%% itself at the caller level (i.e. in your module or in your test case), so it
+%% cannot know that you failed to call a module.
 %%
 %% Use the {@link history/1} or {@link history/2} function to analyze errors.
 -spec validate(Mods) -> boolean() when
@@ -594,7 +688,7 @@ is(MatcherImpl) ->
 %%
 %% If an occurrence of a function call irrespective of the calling process needs
 %% to be captured then `_' might be passed as `OptCallerPid', but it is better
-%% to use {@link capture/3} instead.
+%% to use {@link capture/5} instead.
 -spec capture(Occur, Mod, Func, OptArgsSpec, ArgNum, OptCallerPid) -> ArgValue when
       Occur :: first | last | pos_integer(),
       Mod :: atom(),
@@ -618,7 +712,7 @@ capture(Occur, Mod, Func, OptArgsSpec, ArgNum, OptCallerPid) ->
 %% retrieve the argument value passed when the function was called the first
 %% or the last time respectively.
 %%
-%% @equiv capture(Occur, '_', Mod, Func, OptArgsSpec, ArgNum)
+%% @equiv capture(Occur, Mod, Func, OptArgsSpec, ArgNum, '_')
 -spec capture(Occur, Mod, Func, OptArgsSpec, ArgNum) -> ArgValue when
       Occur :: first | last | pos_integer(),
       Mod::atom(),

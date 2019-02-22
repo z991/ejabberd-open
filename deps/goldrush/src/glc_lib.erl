@@ -60,6 +60,11 @@ matches({Key, '<', Term}, Event) ->
         {true, Term2} -> Term2 < Term;
         false -> false
     end;
+matches({Key, '=<', Term}, Event) ->
+    case gre:find(Key, Event) of
+        {true, Term2} -> Term2 =< Term;
+        false -> false
+    end;
 matches({Key, '=', Term}, Event) ->
     case gre:find(Key, Event) of
         {true, Term2} -> Term2 =:= Term;
@@ -73,6 +78,11 @@ matches({Key, '!=', Term}, Event) ->
 matches({Key, '>', Term}, Event) ->
     case gre:find(Key, Event) of
         {true, Term2} -> Term2 > Term;
+        false -> false
+    end;
+matches({Key, '>=', Term}, Event) ->
+    case gre:find(Key, Event) of
+        {true, Term2} -> Term2 >= Term;
         false -> false
     end;
 matches({Key, '*'}, Event) ->
@@ -97,9 +107,13 @@ repeat(Query, Fun) ->
 -spec onoutput(glc_ops:op()) -> output | no_return().
 onoutput({_, '<', _}) ->
     output;
+onoutput({_, '=<', _}) ->
+    output;
 onoutput({_, '=', _}) ->
     output;
 onoutput({_, '>', _}) ->
+    output;
+onoutput({_, '>=', _}) ->
     output;
 onoutput({_, '*'}) ->
     output;
@@ -382,10 +396,31 @@ delete_from_any_test() ->
 
 default_is_output_test_() ->
     [?_assertEqual(output, glc_lib:onoutput(glc:lt(a, 1))),
+     ?_assertEqual(output, glc_lib:onoutput(glc:lte(a, 1))),
      ?_assertEqual(output, glc_lib:onoutput(glc:eq(a, 1))),
      ?_assertEqual(output, glc_lib:onoutput(glc:gt(a, 1))),
+     ?_assertEqual(output, glc_lib:onoutput(glc:gte(a, 1))),
      ?_assertEqual(output, glc_lib:onoutput(glc:wc(a))),
      ?_assertEqual(output, glc_lib:onoutput(glc:nf(a)))
+    ].
+
+matches_test_() ->
+    Event = gre:make([{a, 2}], [list]),
+    [?_assertEqual(true, glc_lib:matches(glc:lt(a, 3), Event)),
+     ?_assertEqual(true, glc_lib:matches(glc:lte(a, 2), Event)),
+     ?_assertEqual(true, glc_lib:matches(glc:eq(a, 2), Event)),
+     ?_assertEqual(true, glc_lib:matches(glc:gt(a, 1), Event)),
+     ?_assertEqual(true, glc_lib:matches(glc:gte(a, 2), Event)),
+     ?_assertEqual(true, glc_lib:matches(glc:wc(a), Event)),
+     ?_assertEqual(true, glc_lib:matches(glc:nf(b), Event)),
+
+     ?_assertEqual(false, glc_lib:matches(glc:lt(a, 2), Event)),
+     ?_assertEqual(false, glc_lib:matches(glc:lte(a, 1), Event)),
+     ?_assertEqual(false, glc_lib:matches(glc:eq(a, 3), Event)),
+     ?_assertEqual(false, glc_lib:matches(glc:gt(a, 2), Event)),
+     ?_assertEqual(false, glc_lib:matches(glc:gte(a, 3), Event)),
+     ?_assertEqual(false, glc_lib:matches(glc:wc(b), Event)),
+     ?_assertEqual(false, glc_lib:matches(glc:nf(a), Event))
     ].
 
 -ifdef(PROPER).

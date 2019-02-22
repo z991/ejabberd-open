@@ -303,8 +303,8 @@ handle_info({mnesia_table_event,
 	    State) ->
     ?DEBUG("mnesia_table_event write pid is ~p~n", [Pid]),
     erlang:monitor(process, Pid), {noreply, State};
-handle_info({'DOWN', _Ref, _Type, Pid, _Info}, State) ->
-	?DEBUG("get pid down info ~p ~n",[Pid]),
+handle_info({'DOWN', _Ref, Type, Pid, Info}, State) ->
+	?DEBUG("get pid down info ~p ~n",[{Pid, Type, Info}]),
     F = fun () ->
 		Es = mnesia:select(route,
 				   [{#route{pid = Pid, _ = '_'}, [], ['$_']}]),

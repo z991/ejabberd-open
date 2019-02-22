@@ -87,7 +87,7 @@ mech_step(#state{step = 2} = State, ClientIn) ->
 				      if is_tuple(Ret) -> Ret;
 					 true ->
 					     TempSalt =
-						 crypto:rand_bytes(?SALT_LENGTH),
+						 crypto:strong_rand_bytes(?SALT_LENGTH),
 					     SaltedPassword =
 						 scram:salted_password(Ret,
 								       TempSalt,
@@ -101,7 +101,7 @@ mech_step(#state{step = 2} = State, ClientIn) ->
 				      str:substr(ClientIn,
                                                  str:str(ClientIn, <<"n=">>)),
 				  ServerNonce =
-				      jlib:encode_base64(crypto:rand_bytes(?NONCE_LENGTH)),
+				      jlib:encode_base64(crypto:strong_rand_bytes(?NONCE_LENGTH)),
 				  ServerFirstMessage =
                                         iolist_to_binary(
                                           ["r=",

@@ -1,8 +1,8 @@
-# Brod - Apache Kafka Erlang client library
+[![Build Status](https://travis-ci.org/klarna/brod.svg)](https://travis-ci.org/klarna/brod) [![Coverage Status](https://coveralls.io/repos/github/klarna/brod/badge.svg?branch=master)](https://coveralls.io/github/klarna/brod?branch=master)
 
-Brod is an erlang implementation of the Apache Kafka protocol, providing support for both producers and consumers.
+# Brod - Apache Kafka Client for Erlang/Elixir
 
-[![Build Status](https://travis-ci.org/klarna/brod.svg)](https://travis-ci.org/klarna/brod)
+Brod is an Erlang implementation of the Apache Kafka protocol, providing support for both producers and consumers.
 
 Why "brod"? [http://en.wikipedia.org/wiki/Max_Brod](http://en.wikipedia.org/wiki/Max_Brod)
 
@@ -11,65 +11,80 @@ Why "brod"? [http://en.wikipedia.org/wiki/Max_Brod](http://en.wikipedia.org/wiki
 * Supports Apache Kafka v0.8+
 * Robust producer implementation supporting in-flight requests and asynchronous acknowledgements
 * Both consumer and producer handle leader re-election and other cluster disturbances internally
-* Opens max 1 tcp connection to a broker per "brod_client", one can create more clients if needed
+* Opens max 1 tcp connection to a broker per `brod_client`, one can create more clients if needed
 * Producer: will start to batch automatically when number of unacknowledged (in flight) requests exceeds configurable maximum
 * Producer: will try to re-send buffered messages on common errors like "Not a leader for partition", errors are resolved automatically by refreshing metadata
 * Simple consumer: The poller, has a configurable "prefetch count" - it will continue sending fetch requests as long as total number of unprocessed messages (not message-sets) is less than "prefetch count"
 * Group subscriber: Support for consumer groups with options to have Kafka as offset storage or a custom one
 * Topic subscriber: Subscribe on messages from all or selected topic partitions without using consumer groups
-
-# Missing features
-
-* lz4 compression & decompression
-* new 0.10 on-wire message format
-* new 0.10.1.0 create/delete topic api
+* Pick latest supported version when sending requests to kafka.
+* Direct APIs for message send/fetch and cluster inspection/management without having to start clients/producers/consumers.
+* A escriptized command-line tool for message send/fetch and cluster inspection/management.
 
 # Building and testing
 
-    make
-    make test-env t # requires docker-composer in place
+    make compile
+    make test-env t # requires docker-compose in place
+
+# Working With Kafka 0.9.x or Earlier
+
+Make sure `{query_api_versions, false}` exists in client config.
+This is because `ApiVersionRequest` was introduced in kafka 0.10, 
+sending such request to older version brokers will cause connection failure.
+
+e.g. in sys.config:
+
+```
+[{brod,
+   [ { clients
+     , [ { brod_client_1 %% registered name
+         , [ { endpoints, [{"localhost", 9092}]}
+           , { query_api_versions, false} %% <---------- here
+           ]}]}]}]
+```
 
 # Quick Demo
 
-Assuming kafka is running at `localhost:9092` 
-and there is a topic named `brod-test`.
+Assuming kafka is running at `localhost:9092` and there is a topic named `test-topic`.
 
-Below code snippet is copied from Erlang shell 
-with some non-important printouts trimmed.
+Start Erlang shell by `make compile; erl -pa _build/default/lib/*/ebin`, then paste lines below into shell:
 
 ```erlang
-> rr(brod).
-> {ok, _} = application:ensure_all_started(brod).
-> KafkaBootstrapEndpoints = [{"localhost", 9092}].
-> Topic = <<"brod-test">>.
-> Partition = 0.
-> ok = brod:start_client(KafkaBootstrapEndpoints, client1).
-> ok = brod:start_producer(client1, Topic, _ProducerConfig = []).
-> ok = brod:produce_sync(client1, Topic, Partition, <<"key1">>, <<"value1">>).
-> ok = brod:produce_sync(client1, Topic, Partition, <<"key2">>, <<"value2">>).
-> SubscriberCallbackFun =
-    fun(Partition, Msg, ShellPid = CallbackState) ->
-      ShellPid ! Msg,
-      {ok, ack, CallbackState}
-    end.
-> Receive = fun() -> receive Msg -> Msg after 1000 -> timeout end end.
-> brod_topic_subscriber:start_link(client1, Topic, Partitions=[Partition],
-                                   _ConsumerConfig=[{begin_offset, earliest}],
-                                   _CommittdOffsets=[], SubscriberCallbackFun,
-                                   _CallbackState=self()).
-> Receive().
-#kafka_message{offset = 0,magic_byte = 0,attributes = 0,
-               key = <<"key1">>,value = <<"value1">>,crc = 1978725405}
-> Receive().
-#kafka_message{offset = 1,magic_byte = 0,attributes = 0,
-               key = <<"key2">>,value = <<"value2">>,crc = 1964753830}
-> {ok, CallRef} = brod:produce(client1, Topic, Partition, <<"key3">>, <<"value3">>).
-> #brod_produce_reply{ call_ref = CallRef,
-                       result   = brod_produce_req_acked
-                     } = Receive().
-> Receive().
-#kafka_message{offset = 2,magic_byte = 0,attributes = 0,
-               key = <<"key3">>,value = <<"value3">>,crc = -1013830416}
+rr(brod),
+{ok, _} = application:ensure_all_started(brod),
+KafkaBootstrapEndpoints = [{"localhost", 9092}],
+Topic = <<"test-topic">>,
+Partition = 0,
+ok = brod:start_client(KafkaBootstrapEndpoints, client1),
+ok = brod:start_producer(client1, Topic, _ProducerConfig = []),
+{ok, FirstOffset} = brod:produce_sync_offset(client1, Topic, Partition, <<"key1">>, <<"value1">>),
+ok = brod:produce_sync(client1, Topic, Partition, <<"key2">>, <<"value2">>),
+SubscriberCallbackFun = fun(Partition, Msg, ShellPid = CallbackState) -> ShellPid ! Msg, {ok, ack, CallbackState} end,
+Receive = fun() -> receive Msg -> Msg after 1000 -> timeout end end,
+brod_topic_subscriber:start_link(client1, Topic, Partitions=[Partition],
+                                 _ConsumerConfig=[{begin_offset, FirstOffset}],
+                                 _CommittdOffsets=[], message, SubscriberCallbackFun,
+                                 _CallbackState=self()),
+AckCb = fun(Partition, BaseOffset) -> io:format(user, "\nProduced to partition ~p at base-offset ~p\n", [Partition, BaseOffset]) end,
+ok = brod:produce_cb(client1, Topic, Partition, <<>>, [{<<"key3">>, <<"value3">>}], AckCb).
+Receive().
+Receive().
+{ok, {_, [Msg]}} = brod:fetch(KafkaBootstrapEndpoints, Topic, Partition, FirstOffset + 2), Msg.
+```
+
+Example outputs:
+
+```erlang
+#kafka_message{offset = 0,key = <<"key1">>,
+               value = <<"value1">>,ts_type = create,ts = 1531995555085,
+               headers = []}
+#kafka_message{offset = 1,key = <<"key2">>,
+               value = <<"value2">>,ts_type = create,ts = 1531995555107,
+               headers = []}
+Produced to partition 0 at base-offset 406
+#kafka_message{offset = 2,key = <<"key3">>,
+               value = <<"value3">>,ts_type = create,ts = 1531995555129,
+               headers = []}
 ```
 
 # Overview
@@ -118,6 +133,14 @@ ClientConfig = [{reconnect_cool_down_seconds, 10}],
 ok = brod:start_client([{"localhost", 9092}], brod_client_1, ClientConfig).
 ```
 
+Extra [socket options](http://erlang.org/doc/man/gen_tcp.html#type-option)
+could be passed as `{extra_sock_opts, ExtraSockOpts}`, e.g.
+
+```erlang
+ExtraSockOpts = [{sndbuf, 1024*1024}],
+ok = brod:start_client([{"localhost", 9092}], brod_client_1, [{extra_sock_opts, ExtraSockOpts}]).
+```
+
 # Producers
 
 ## Auto start producer with default producer config
@@ -129,7 +152,7 @@ Put below configs to client config in sys.config or app env:
 {default_producer_config, []}
 ```
 
-## Start a producer on demand
+## Start a Producer on Demand
 
 ```erlang
 brod:start_producer(_Client         = brod_client_1,
@@ -137,30 +160,41 @@ brod:start_producer(_Client         = brod_client_1,
                     _ProducerConfig = []).
 ```
 
-## Produce to a known topic-partition:
+## Supported Message Input Format
+
+Brod supports below produce APIs:
+
+- `brod:produce`: Async produce with ack message sent back to caller.
+- `brod:produce_cb`: Async produce with a callback evaluated when ack is received.
+- `brod:produce_sync`: Sync produce returns `ok`.
+- `brod:produce_sync_offset`: Sync produce returns `{ok, BaseOffset}`.
+
+The `Value` arg in these APIs can be:
+
+- `binary()`: One single message
+- `{brod:msg_ts(), binary()}`: One single message with its create-time timestamp
+- `#{ts => brod:msg_ts(), value => binary(), headers => [{_, _}]}`:
+  One single message. If this map does not have a `key` field, the `Key` argument is used.
+- `[{K, V} | {T, K, V}]`: A batch, where `V` could be a nested list of such representation.
+- `[#{key => K, value => V, ts => T, headers => [{_, _}]}]`: A batch.
+
+When `Value` is a batch, the `Key` argument is only used as partitioner input.
+All messages are unified into a batch format of below spec:
+`[#{key => K, value => V, ts => T, headers => [{_, _}]}]`.
+`ts` field is dropped for kafka prior to version `0.10` (produce API version 0, magic version 0)
+`headers` field is dropped for kafka prior to version `0.11` (produce API version 0-2, magic version 0-1)
+
+## Synchronized Produce API
 
 ```erlang
-{ok, CallRef} =
-  brod:produce(_Client    = brod_client_1,
-               _Topic     = <<"brod-test-topic-1">>,
-               _Partition = 0
-               _Key       = <<"some-key">>
-               _Value     = <<"some-value">>),
-
-%% just to illustrate what message to expect
-receive
-  #brod_produce_reply{ call_ref = CallRef
-                     , result   = brod_produce_req_acked
-                     } ->
-    ok
-after 5000 ->
-  erlang:exit(timeout)
-end.
+brod:produce_sync(_Client    = brod_client_1,
+                  _Topic     = <<"brod-test-topic-1">>,
+                  _Partition = 0
+                  _Key       = <<"some-key">>
+                  _Value     = <<"some-value">>).
 ```
 
-## Synchronized produce request
-
-Block calling process until Kafka confirmed the message:
+Or block calling process until Kafka confirmed the message:
 
 ```erlang
 {ok, CallRef} =
@@ -172,17 +206,15 @@ Block calling process until Kafka confirmed the message:
 brod:sync_produce_request(CallRef).
 ```
 
-or the same in one call:
+## Produce One Message and Receive Its Offset in Kafka
 
 ```erlang
-brod:produce_sync(_Client    = brod_client_1,
-                  _Topic     = <<"brod-test-topic-1">>,
-                  _Partition = 0
-                  _Key       = <<"some-key">>
-                  _Value     = <<"some-value">>).
+Client = brod_client_1,
+Topic  = <<"brod-test-topic-1">>,
+{ok, Offset} = brod:produce_sync_offset(Client, Topic, 0, <<>>, <<"value">>).
 ```
 
-## Produce with random partitioner
+## Produce with Random Partitioner
 
 ```erlang
 Client = brod_client_1,
@@ -190,53 +222,54 @@ Topic  = <<"brod-test-topic-1">>,
 PartitionFun = fun(_Topic, PartitionsCount, _Key, _Value) ->
                    {ok, crypto:rand_uniform(0, PartitionsCount)}
                end,
-{ok, CallRef} = brod:produce(Client, Topic, PartitionFun, Key, Value).
+ok = brod:produce_sync(Client, Topic, PartitionFun, Key, Value).
 ```
 
-## Produce a batch of (maybe nested) Key-Value list
+## Produce a Batch
 
 ```erlang
-%% The top-level key is used for partitioning
-%% and nested keys are discarded.
-%% Nested messages are serialized into a message set to the same partition.
 brod:produce(_Client    = brod_client_1,
              _Topic     = <<"brod-test-topic-1">>,
              _Partition = MyPartitionerFun
              _Key       = KeyUsedForPartitioning
-             _Value     = [ {<<"k1", <<"v1">>}
-                          , {<<"k2", <<"v2">>}
-                          , { _KeyDiscarded = <<>>
-                            , [ {<<"k3">>, <<"v3">>}
-                              , {<<"k4">>, <<"v4">>}
-                              ]}
+             _Value     = [ #{key => "k1" value => "v1", headers = [{"foo", "bar"}]}
+                          , #{key => "k2" value => "v2"}
                           ]).
 ```
 
-## Handle acks from kafka
+## Handle Acks from Kafka as Messages
 
-Unless brod:produce_sync was called, callers of brod:produce should 
-expect a message of below pattern for each produce call. 
-Add `-include_lib("brod/include/brod.hrl").` to use the record.
+For async produce APIs `brod:produce/3` and `brod:produce/5`, 
+the caller should expect a message of below pattern for each produce call. 
 
 ```erlang
 #brod_produce_reply{ call_ref = CallRef %% returned from brod:produce
                    , result   = brod_produce_req_acked
                    }
 ```
+Add `-include_lib("brod/include/brod.hrl").` to use the record.
 
-NOTE: If required_acks is set to 0 in producer config, 
-kafka will NOT ack the requests, and the reply message is sent back 
-to caller immediately after the message has been sent to the socket process.
-
-In case the brod:produce caller is a process like gen_server which 
+In case the `brod:produce` caller is a process like `gen_server` which 
 receives ALL messages, the callers should keep the call references in its 
 looping state and match the replies against them when received. 
-Otherwise brod:sync_produce_request/1 can be used to block-wait for acks.
+Otherwise `brod:sync_produce_request/1` can be used to block-wait for acks.
+
+NOTE: If `required_acks` is set to `none` in producer config, 
+kafka will NOT ack the requests, and the reply message is sent back 
+to caller immediately after the message has been sent to the socket process.
 
 NOTE: The replies are only strictly ordered per-partition. 
 i.e. if the caller is producing to two or more partitions, 
 it may receive replies ordered differently than in which order 
-brod:produce API was called.
+`brod:produce` API was called.
+
+## Handle Acks from Kafka in Callback Function
+
+Async APIs `brod:produce_cb/4` and `brod:produce_cb/6` allow callers to 
+provided a callback function to handle acknowledgements from kafka. 
+In this case, the caller may want to monitor the producer process because 
+then they know that the callbacks will not be evaluated if the producer is 'DOWN',
+and there is perhaps a need for retry.
 
 # Consumers
 
@@ -339,9 +372,13 @@ start(ClientId) ->
 
 # Authentication support
 
-brod supports SASL PLAIN authentication mechanism out of the box. To use it
-add `{sasl, {plain, Username, Password}}` to client config. Also, brod has authentication
-plugins support. Authentication callback module should implement `brod_auth_backend` behaviour.
+brod supports SASL `PLAIN`, `SCRAM-SHA-256` and `SCRAM-SHA-512` authentication mechanisms out of the box.
+To use it, add `{sasl, {Mechanism, Username, Password}}` or `{sasl, {Mechanism, File}}` to client config.
+Where `Mechanism` is `plain | scram_sha_256 | scram_sha_512`, and `File` is the path to a text file
+which contains two lines, first line for username and second line for password
+
+Also, brod has authentication plugins support with `{sasl, {callback, Module, Opts}}` in client config.
+Authentication callback module should implement `brod_auth_backend` behaviour.
 Auth function spec:
 
 ```erlang
@@ -352,7 +389,7 @@ auth(Host :: string(), Sock :: gen_tcp:socket() | ssl:sslsocket(),
 ```
 
 If authentication is successful - callback function should return an atom `ok`, otherwise - error tuple with reason description.
-For example, you can use `brod_gssapi' plugin (https://github.com/ElMaxo/brod_gssapi) for SASL GSSAPI authentication.
+For example, you can use `brod_gssapi` plugin (https://github.com/ElMaxo/brod_gssapi) for SASL GSSAPI authentication.
 To use it - add it as dependency to your top level project that uses brod.
 Then add `{sasl, {callback, brod_gssapi, {gssapi, Keytab, Principal}}}` to client config.
 Keytab should be the keytab file path, and Principal should be a byte-list or binary string.
@@ -370,8 +407,7 @@ Topic = <<"topic">>.
 Partition = 0.
 brod:get_metadata(Hosts).
 brod:get_metadata(Hosts, [Topic]).
-brod:get_offsets(Hosts, Topic, Partition).
-brod:fetch(Hosts, Topic, Partition, 1).
+brod:resolve_offset(Hosts, Topic, Partition).
 ```
 
 # brod-cli: A command line tool to interact with Kafka
@@ -379,17 +415,98 @@ brod:fetch(Hosts, Topic, Partition, 1).
 This will build a self-contained binary with brod application
 
 ```bash
-make rel
-./_rel/brod/bin/brod --help
+make brod-cli
+_build/brod_cli/rel/brod/bin/brod -h
 ```
 
 Disclaimer: This script is NOT designed for use cases where fault-tolerance is a hard requirement.
 As it may crash when e.g. kafka cluster is temporarily unreachable,
 or (for fetch command) when the parition leader migrates to another broker in the cluster.
 
-Start an Erlang shell with brod started
+## brod-cli examples (with `alias brod=_build/brod_cli/rel/brod/bin/brod`):
 
-```bash
-./_rel/brod/bin/brod-i
+### Fetch and print metadata
 ```
+brod meta -b localhost
+```
+
+### Produce a Message
+
+```
+brod send -b localhost -t test-topic -p 0 -k "key" -v "value"
+
+```
+
+### Fetch a Message
+
+```
+brod fetch -b localhost -t test-topic -p 0 --fmt 'io:format("offset=~p, ts=~p, key=~s, value=~s\n", [Offset, Ts, Key, Value])'
+```
+
+Bound variables to be used in `--fmt` expression:
+
+- `Offset`: Message offset
+- `Key`: Kafka key
+- `Value`: Kafka Value
+- `TsType`: Timestamp type either `create` or `append`
+- `Ts`: Timestamp, `-1` as no value
+
+### Stream Messages to Kafka
+
+Send `README.md` to kafka one line per kafka message
+```
+brod pipe -b localhost:9092 -t test-topic -p 0 -s @./README.md
+```
+
+### Resolve Offset
+
+```
+brod offset -b localhost:9092 -t test-topic -p 0
+```
+
+### List or Describe Groups
+
+```
+# List all groups
+brod groups -b localhost:9092
+
+# Describe groups
+brod groups -b localhost:9092 --ids group-1,group-2
+```
+
+### Display Committed Offsets
+
+```
+# all topics
+brod commits -b localhost:9092 --id the-group-id --describe
+
+# a specific topic
+brod commits -b localhost:9092 --id the-group-id --describe --topic topic-name
+```
+
+### Commit Offsets
+
+NOTE: This feature is designed for force overwriting commits, not for regular use of offset commit.
+
+```
+# Commit 'latest' offsets of all partitions with 2 days retention
+brod commits -b localhost:9092 --id the-group-id --topic topic-name --offsets latest --retention 2d
+
+# Commit offset=100 for partition 0 and 200 for partition 1
+brod commits -b localhost:9092 --id the-group-id --topic topic-name --offsets "0:100,1:200"
+
+# Use --retention 0 to delete commits (may linger in kafka before cleaner does its job)
+brod commits -b localhost:9092 --id the-group-id --topic topic-name --offsets latest --retention 0
+
+# Try join an active consumer group using 'range' protocol and steal one partition assignment then commit offset=10000
+brod commits -b localhost:9092 -i the-group-id -t topic-name -o "0:10000" --protocol range
+```
+
+## TODOs
+
+* HTML tagged EDoc
+* Support scram-sasl in brod-cli
+* lz4 compression & decompression
+* Create/delete topic APIs
+* Transactional produce APIs
 

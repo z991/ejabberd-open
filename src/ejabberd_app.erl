@@ -66,7 +66,6 @@ start(normal, _Args) ->
     ejabberd_rdbms:start(),
     ejabberd_riak_sup:start(),
     ejabberd_redis:start(),
-    ejabberd_reload_hosts:init_db_host(node()),
     ejabberd_sm:start(),
     cyrsasl:start(),
     % Profiling
@@ -74,7 +73,6 @@ start(normal, _Args) ->
     %ejabberd_debug:fprof_start(),
     maybe_add_nameservers(),
     ejabberd_auth:start(),
-    ejabberd_oauth:start(),
     gen_mod:start_modules(),
 
 

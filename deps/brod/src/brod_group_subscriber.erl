@@ -1,5 +1,5 @@
 %%%
-%%%   Copyright (c) 2016-2017 Klarna AB
+%%%   Copyright (c) 2016-2018 Klarna Bank AB (publ)
 %%%
 %%%   Licensed under the Apache License, Version 2.0 (the "License");
 %%%   you may not use this file except in compliance with the License.
@@ -39,7 +39,9 @@
 -behaviour(brod_group_member).
 
 -export([ ack/4
+        , ack/5
         , commit/1
+        , commit/4
         , start_link/7
         , start_link/8
         , stop/1
@@ -50,6 +52,7 @@
         , assignments_received/4
         , assignments_revoked/1
         , assign_partitions/3
+        , user_data/1
         ]).
 
 -export([ code_change/3
@@ -77,15 +80,21 @@
 %% {ok, ack, NewCallbackState}
 %%   The subscriber has completed processing the message.
 %%
+%% {ok, ack_no_commit, NewCallbackState}
+%%   The subscriber has completed processing the message, but it
+%%   is not ready to commit offset yet. It should call
+%%   brod_group_subscriber:commit/4 later.
+%%
 %% While this callback function is being evaluated, the fetch-ahead
 %% partition-consumers are fetching more messages behind the scene
-%% unless prefetch_count is set to 0 in consumer config.
+%% unless prefetch_count and prefetch_bytes are set to 0 in consumer config.
 %%
 -callback handle_message(brod:topic(),
                          brod:partition(),
                          brod:message(),
                          cb_state()) -> {ok, cb_state()} |
-                                        {ok, ack, cb_state()}.
+                                        {ok, ack, cb_state()} |
+                                        {ok, ack_no_commit, cb_state()}.
 
 %% This callback is called only when subscriber is to commit offsets locally
 %% instead of kafka.
@@ -100,13 +109,14 @@
 %-callback get_committed_offsets(brod:group_id(),
 %                                [{brod:topic(), brod:partition()}],
 %                                cb_state()) ->  {ok,
-%                                                 [{{brod:topic()
-%                                                   , brod:partition()}
-%                                                  , brod:offset()}],
+%                                                 [{{brod:topic(),
+%                                                    brod:partition()},
+%                                                   brod:offset()}],
 %                                                 cb_state()}.
 %
 %% This function is called only when 'partition_assignment_strategy' is
 %% 'callback_implemented' in group config.
+%% The first element in the group member list is ensured to be the group leader.
 %
 % commented out as it's an optional callback
 %-callback assign_partitions([brod:group_member()],
@@ -124,7 +134,10 @@
         , consumer_mref   :: ?undef | reference()
         , begin_offset    :: ?undef | brod:offset()
         , acked_offset    :: ?undef | brod:offset()
+        , last_offset     :: ?undef | brod:offset()
         }).
+
+-type consumer() :: #consumer{}.
 
 -type ack_ref() :: {brod:topic(), brod:partition(), brod:offset()}.
 
@@ -135,7 +148,7 @@
         , memberId           :: ?undef | member_id()
         , generationId       :: ?undef | brod:group_generation_id()
         , coordinator        :: pid()
-        , consumers = []     :: [#consumer{}]
+        , consumers = []     :: [consumer()]
         , consumer_config    :: brod:consumer_config()
         , is_blocked = false :: boolean()
         , subscribe_tref     :: ?undef | reference()
@@ -144,7 +157,9 @@
         , message_type       :: message | message_set
         }).
 
-%% delay 2 seconds retry the failed subscription to partiton consumer process
+-type state() :: #state{}.
+
+%% delay 2 seconds retry the failed subscription to partition consumer process
 -define(RESUBSCRIBE_DELAY, 2000).
 
 -define(LO_CMD_SUBSCRIBE_PARTITIONS, '$subscribe_partitions').
@@ -170,7 +185,7 @@
 %%   implemented for message processing.
 %% CbInitArg:
 %%   The term() that is going to be passed to CbModule:init/1 when
-%%   initializing the subscriger.
+%%   initializing the subscriber.
 %% @end
 -spec start_link(brod:client(), brod:group_id(), [brod:topic()],
                  brod:group_config(), brod:consumer_config(),
@@ -202,7 +217,7 @@ start_link(Client, GroupId, Topics, GroupConfig,
 %%   implemented for message processing.
 %% CbInitArg:
 %%   The term() that is going to be passed to CbModule:init/1 when
-%%   initializing the subscriger.
+%%   initializing the subscriber.
 %% @end
 -spec start_link(brod:client(), brod:group_id(), [brod:topic()],
                  brod:group_config(), brod:consumer_config(),
@@ -214,6 +229,7 @@ start_link(Client, GroupId, Topics, GroupConfig,
           ConsumerConfig, MessageType, CbModule, CbInitArg},
   gen_server:start_link(?MODULE, Args, []).
 
+%% @doc Stop group subscriber, wait for pid DOWN before return.
 -spec stop(pid()) -> ok.
 stop(Pid) ->
   Mref = erlang:monitor(process, Pid),
@@ -223,7 +239,7 @@ stop(Pid) ->
       ok
   end.
 
-%% @doc Acknowledge an offset.
+%% @doc Acknowledge and commit an offset.
 %% The subscriber may ack a later (greater) offset which will be considered
 %% as multi-acking the earlier (smaller) offsets. This also means that
 %% disordered acks may overwrite offset commits and lead to unnecessary
@@ -231,23 +247,39 @@ stop(Pid) ->
 %% @end
 -spec ack(pid(), brod:topic(), brod:partition(), brod:offset()) -> ok.
 ack(Pid, Topic, Partition, Offset) ->
-  gen_server:cast(Pid, {ack, Topic, Partition, Offset}).
+  ack(Pid, Topic, Partition, Offset, true).
+
+%% @doc Acknowledge an offset.
+%% This call may or may not commit group subscriber offset depending on
+%% the value of `Commit' argument
+%% @end
+-spec ack(pid(), brod:topic(), brod:partition(), brod:offset(), boolean()) ->
+             ok.
+ack(Pid, Topic, Partition, Offset, Commit) ->
+  gen_server:cast(Pid, {ack, Topic, Partition, Offset, Commit}).
 
 %% @doc Commit all acked offsets. NOTE: This is an async call.
 -spec commit(pid()) -> ok.
 commit(Pid) ->
   gen_server:cast(Pid, commit_offsets).
 
+%% @doc Commit offset for a topic. This is an asynchronous call
+-spec commit(pid(), brod:topic(), brod:partition(), brod:offset()) -> ok.
+commit(Pid, Topic, Partition, Offset) ->
+  gen_server:cast(Pid, {commit_offset, Topic, Partition, Offset}).
+
+user_data(_Pid) -> <<>>.
+
 %%%_* APIs for group coordinator ===============================================
 
-%% @doc Called by group coordinator when there is new assignemnt received.
+%% @doc Called by group coordinator when there is new assignment received.
 -spec assignments_received(pid(), member_id(), integer(),
                            brod:received_assignments()) -> ok.
 assignments_received(Pid, MemberId, GenerationId, TopicAssignments) ->
   gen_server:cast(Pid, {new_assignments, MemberId,
                         GenerationId, TopicAssignments}).
 
-%% @doc Called by group coordinator before re-joinning the consumer group.
+%% @doc Called by group coordinator before re-joining the consumer group.
 -spec assignments_revoked(pid()) -> ok.
 assignments_revoked(Pid) ->
   gen_server:call(Pid, unsubscribe_all_partitions, infinity).
@@ -258,14 +290,18 @@ assignments_revoked(Pid) ->
 -spec assign_partitions(pid(), [brod:group_member()],
                         [{brod:topic(), brod:partition()}]) ->
         [{member_id(), [brod:partition_assignment()]}].
-assign_partitions(Pid, MemberMetadataList, TopicPartitionList) ->
-  Call = {assign_partitions, MemberMetadataList, TopicPartitionList},
+assign_partitions(Pid, Members, TopicPartitionList) ->
+  Call = {assign_partitions, Members, TopicPartitionList},
   gen_server:call(Pid, Call, infinity).
 
 %% @doc Called by group coordinator when initializing the assignments
 %% for subscriber.
-%% NOTE: this function is called only when it is DISABLED to commit offsets
-%%       to kafka.
+%%
+%% NOTE: This function is called only when `offset_commit_policy' is set to
+%%       `consumer_managed' in group config.
+%%
+%% NOTE: The committed offsets should be the offsets for successfully processed
+%%       (acknowledged) messages, not the `begin_offset' to start fetching from.
 %% @end
 -spec get_committed_offsets(pid(), [{brod:topic(), brod:partition()}]) ->
         {ok, [{{brod:topic(), brod:partition()}, brod:offset()}]}.
@@ -293,18 +329,9 @@ init({Client, GroupId, Topics, GroupConfig,
                 },
   {ok, State}.
 
-handle_info({_ConsumerPid,
-             #kafka_message_set{ topic     = Topic
-                               , partition = Partition
-                               , messages  = Messages
-                               }},
-            #state{message_type = message} = State) ->
-  NewState = handle_messages(Topic, Partition, Messages, State),
-  {noreply, NewState};
-handle_info( {_ConsumerPid, MessageSet}
-           , #state{message_type = message_set} = State) ->
-  NewState = handle_message_set(MessageSet, State),
-  {noreply, NewState};
+handle_info({_ConsumerPid, #kafka_message_set{} = MsgSet}, State0) ->
+  State = handle_consumer_delivery(MsgSet, State0),
+  {noreply, State};
 handle_info({'DOWN', Mref, process, _Pid, _Reason},
             #state{client_mref = Mref} = State) ->
   %% restart, my supervisor should restart me
@@ -313,13 +340,12 @@ handle_info({'DOWN', Mref, process, _Pid, _Reason},
   {stop, client_down, State};
 handle_info({'DOWN', _Mref, process, Pid, Reason},
             #state{consumers = Consumers} = State) ->
-  case lists:keyfind(Pid, #consumer.consumer_pid, Consumers) of
-    #consumer{topic_partition = TP} = Consumer ->
+  case get_consumer(Pid, Consumers) of
+    #consumer{} = Consumer ->
       NewConsumer = Consumer#consumer{ consumer_pid  = ?DOWN(Reason)
                                      , consumer_mref = ?undef
                                      },
-      NewConsumers = lists:keyreplace(TP, #consumer.topic_partition,
-                                      Consumers, NewConsumer),
+      NewConsumers = put_consumer(NewConsumer, Consumers),
       NewState = State#state{consumers = NewConsumers},
       {noreply, NewState};
     false ->
@@ -348,18 +374,23 @@ handle_call({get_committed_offsets, TopicPartitions}, _From,
   case CbModule:get_committed_offsets(GroupId, TopicPartitions, CbState) of
     {ok, Result, NewCbState} ->
       NewState = State#state{cb_state = NewCbState},
-      {reply, Result, NewState};
+      {reply, {ok, Result}, NewState};
     Unknown ->
       erlang:error({bad_return_value,
                     {CbModule, get_committed_offsets, Unknown}})
   end;
-handle_call({assign_partitions, MemberMetadataList, TopicPartitions}, _From,
+handle_call({assign_partitions, Members, TopicPartitions}, _From,
             #state{ cb_module = CbModule
                   , cb_state  = CbState
                   } = State) ->
-  Result = CbModule:assign_partitions(MemberMetadataList,
-                                      TopicPartitions, CbState),
-  {reply, Result, State};
+  case CbModule:assign_partitions(Members, TopicPartitions, CbState) of
+    {NewCbState, Result} ->
+      {reply, Result, State#state{ cb_state = NewCbState }};
+    %% Returning an updated cb_state is optional and clients that implemented
+    %% brod prior to version 3.7.1 need this backwards compatibly case clause
+    Result when is_list(Result) ->
+      {reply, Result, State}
+  end;
 handle_call(unsubscribe_all_partitions, _From,
             #state{ consumers = Consumers
                   } = State) ->
@@ -375,18 +406,24 @@ handle_call(unsubscribe_all_partitions, _From,
             ok
         end
     end, Consumers),
-  {reply, ok, State#state{ consumers        = []
-                         , is_blocked       = true
+  {reply, ok, State#state{ consumers  = []
+                         , is_blocked = true
                          }};
 handle_call(Call, _From, State) ->
   {reply, {error, {unknown_call, Call}}, State}.
 
-handle_cast({ack, Topic, Partition, Offset}, State) ->
+handle_cast({ack, Topic, Partition, Offset, Commit}, State) ->
   AckRef = {Topic, Partition, Offset},
-  NewState = handle_ack(AckRef, State),
+  NewState = handle_ack(AckRef, State, Commit),
   {noreply, NewState};
 handle_cast(commit_offsets, State) ->
   ok = brod_group_coordinator:commit_offsets(State#state.coordinator),
+  {noreply, State};
+handle_cast({commit_offset, Topic, Partition, Offset}, State) ->
+  #state{ coordinator  = Coordinator
+        , generationId = GenerationId
+        } = State,
+  do_commit_ack(Coordinator, GenerationId, Topic, Partition, Offset),
   {noreply, State};
 handle_cast({new_assignments, MemberId, GenerationId, Assignments},
             #state{ client          = Client
@@ -432,7 +469,24 @@ terminate(_Reason, #state{}) ->
 
 %%%_* Internal Functions =======================================================
 
-%% @private
+handle_consumer_delivery(#kafka_message_set{ topic     = Topic
+                                           , partition = Partition
+                                           , messages  = Messages
+                                           } = MsgSet,
+                         #state{message_type = MsgType} = State0) ->
+  State = update_last_offset({Topic, Partition}, Messages, State0),
+  case MsgType of
+    message -> handle_messages(Topic, Partition, Messages, State);
+    message_set -> handle_message_set(MsgSet, State)
+  end.
+
+update_last_offset(TP, Messages, #state{consumers = Consumers} = State) ->
+  %% brod_consumer never delivers empty message set, lists:last is safe
+  #kafka_message{offset = LastOffset} = lists:last(Messages),
+  C = get_consumer(TP, Consumers),
+  Consumer = C#consumer{last_offset = LastOffset},
+  State#state{consumers = put_consumer(Consumer, Consumers)}.
+
 -spec start_subscribe_timer(?undef | reference(), timeout()) -> reference().
 start_subscribe_timer(?undef, Delay) ->
   erlang:send_after(Delay, self(), ?LO_CMD_SUBSCRIBE_PARTITIONS);
@@ -447,12 +501,14 @@ handle_message_set(MessageSet, State) ->
                     , messages  = Messages
                     } = MessageSet,
   #state{cb_module = CbModule, cb_state = CbState} = State,
-  {AckNow, NewCbState} =
+  {AckNow, CommitNow, NewCbState} =
     case CbModule:handle_message(Topic, Partition, MessageSet, CbState) of
       {ok, NewCbState_} ->
-        {false, NewCbState_};
+        {false, false, NewCbState_};
       {ok, ack, NewCbState_} ->
-        {true, NewCbState_};
+        {true, true, NewCbState_};
+      {ok, ack_no_commit, NewCbState_} ->
+        {true, false, NewCbState_};
       Unknown ->
         erlang:error({bad_return_value,
                       {CbModule, handle_message, Unknown}})
@@ -463,7 +519,7 @@ handle_message_set(MessageSet, State) ->
       LastMessage = lists:last(Messages),
       LastOffset  = LastMessage#kafka_message.offset,
       AckRef      = {Topic, Partition, LastOffset},
-      handle_ack(AckRef, State1);
+      handle_ack(AckRef, State1, CommitNow);
     false -> State1
   end.
 
@@ -473,12 +529,14 @@ handle_messages(Topic, Partition, [Msg | Rest], State) ->
   #kafka_message{offset = Offset} = Msg,
   #state{cb_module = CbModule, cb_state = CbState} = State,
   AckRef = {Topic, Partition, Offset},
-  {AckNow, NewCbState} =
+  {AckNow, CommitNow, NewCbState} =
     case CbModule:handle_message(Topic, Partition, Msg, CbState) of
       {ok, NewCbState_} ->
-        {false, NewCbState_};
+        {false, false, NewCbState_};
       {ok, ack, NewCbState_} ->
-        {true, NewCbState_};
+        {true, true, NewCbState_};
+      {ok, ack_no_commit, NewCbState_} ->
+        {true, false, NewCbState_};
       Unknown ->
         erlang:error({bad_return_value,
                      {CbModule, handle_message, Unknown}})
@@ -486,44 +544,41 @@ handle_messages(Topic, Partition, [Msg | Rest], State) ->
   State1 = State#state{cb_state = NewCbState},
   NewState =
     case AckNow of
-      true  -> handle_ack(AckRef, State1);
+      true  -> handle_ack(AckRef, State1, CommitNow);
       false -> State1
     end,
   handle_messages(Topic, Partition, Rest, NewState).
 
--spec handle_ack(ack_ref(), #state{}) -> #state{}.
+-spec handle_ack(ack_ref(), state(), boolean()) -> state().
 handle_ack(AckRef, #state{ generationId = GenerationId
                          , consumers    = Consumers
                          , coordinator  = Coordinator
-                         } = State) ->
+                         } = State, CommitNow) ->
   {Topic, Partition, Offset} = AckRef,
-  case lists:keyfind({Topic, Partition},
-                     #consumer.topic_partition, Consumers) of
-    #consumer{consumer_pid = ConsumerPid} = Consumer ->
+  case get_consumer({Topic, Partition}, Consumers) of
+    #consumer{consumer_pid = ConsumerPid} = Consumer when CommitNow ->
       ok = consume_ack(ConsumerPid, Offset),
-      ok = commit_ack(Coordinator, GenerationId, Topic, Partition, Offset),
+      ok = do_commit_ack(Coordinator, GenerationId, Topic, Partition, Offset),
       NewConsumer = Consumer#consumer{acked_offset = Offset},
-      NewConsumers = lists:keyreplace({Topic, Partition},
-                                      #consumer.topic_partition,
-                                      Consumers, NewConsumer),
+      NewConsumers = put_consumer(NewConsumer, Consumers),
       State#state{consumers = NewConsumers};
+    #consumer{consumer_pid = ConsumerPid} ->
+      ok = consume_ack(ConsumerPid, Offset),
+      State;
     false ->
-      %% stale ack, ignore.
+      %% Stale async-ack, discard.
       State
   end.
 
-%% @private Tell consumer process to fetch more (if pre-fetch count allows).
-consume_ack(Pid, Offset) when is_pid(Pid) ->
-  ok = brod:consume_ack(Pid, Offset);
-consume_ack(_Down, _Offset) ->
-  %% consumer is down, should be restarted by its supervisor
+%% Tell consumer process to fetch more (if pre-fetch count/byte limit allows).
+consume_ack(Pid, Offset) ->
+  is_pid(Pid) andalso brod:consume_ack(Pid, Offset),
   ok.
 
-%% @private Send an async message to group coordinator for offset commit.
-commit_ack(Pid, GenerationId, Topic, Partition, Offset) ->
+%% Send an async message to group coordinator for offset commit.
+do_commit_ack(Pid, GenerationId, Topic, Partition, Offset) ->
   ok = brod_group_coordinator:ack(Pid, GenerationId, Topic, Partition, Offset).
 
-%% @private
 subscribe_partitions(#state{ client    = Client
                            , consumers = Consumers0
                            } = State) ->
@@ -531,19 +586,25 @@ subscribe_partitions(#state{ client    = Client
     lists:map(fun(C) -> subscribe_partition(Client, C) end, Consumers0),
   {ok, State#state{consumers = Consumers}}.
 
-%% @private
 subscribe_partition(Client, Consumer) ->
   #consumer{ topic_partition = {Topic, Partition}
            , consumer_pid    = Pid
            , begin_offset    = BeginOffset0
            , acked_offset    = AckedOffset
+           , last_offset     = LastOffset
            } = Consumer,
   case brod_utils:is_pid_alive(Pid) of
     true ->
       Consumer;
+    false when AckedOffset =/= LastOffset andalso LastOffset =/= ?undef ->
+      %% The last fetched offset is not yet acked,
+      %% do not re-subscribe now to keep it simple and slow.
+      %% Otherwise if we subscribe with {begin_offset, LastOffset + 1}
+      %% we may exceed pre-fetch window size.
+      Consumer;
     false ->
-      %% fetch from the last committed offset + 1
-      %% otherwise fetch from the begin offset
+      %% fetch from the last acked offset + 1
+      %% otherwise fetch from the assigned begin_offset
       BeginOffset = case AckedOffset of
                       ?undef        -> BeginOffset0;
                       N when N >= 0 -> N + 1
@@ -574,6 +635,14 @@ log(#state{ groupId  = GroupId
     Level,
     "group subscriber (groupId=~s,memberId=~s,generation=~p,pid=~p):\n" ++ Fmt,
     [GroupId, MemberId, GenerationId, self() | Args]).
+
+get_consumer(Pid, Consumers) when is_pid(Pid) ->
+  lists:keyfind(Pid, #consumer.consumer_pid, Consumers);
+get_consumer({_, _} = TP, Consumers) ->
+  lists:keyfind(TP, #consumer.topic_partition, Consumers).
+
+put_consumer(#consumer{topic_partition = TP} = C, Consumers) ->
+  lists:keyreplace(TP, #consumer.topic_partition, Consumers, C).
 
 %%%_* Emacs ====================================================================
 %%% Local Variables:

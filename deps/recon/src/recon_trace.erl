@@ -169,6 +169,13 @@
 %%% The only output still sent to the Group Leader is the rate limit being
 %%% tripped, and any errors. The rest will be sent to the other IO
 %%% server (see [http://erlang.org/doc/apps/stdlib/io_protocol.html]).
+%%%
+%%% == Record Printing ==
+%%%
+%%% Thanks to code contributed by Bartek Górny, record printing can be added
+%%% to traces by first importing records in an active session with
+%%% `recon_rec:import([Module, ...])', after which the records declared in
+%%% the module list will be supported.
 %%% @end
 -module(recon_trace).
 
@@ -178,7 +185,7 @@
 -export([format/1]).
 
 %% Internal exports
--export([count_tracer/1, rate_tracer/2, formatter/5]).
+-export([count_tracer/1, rate_tracer/2, formatter/5, format_trace_output/2]).
 
 -type matchspec()    :: [{[term()], [term()], [term()]}].
 -type shellfun()     :: fun((_) -> term()).
@@ -523,7 +530,7 @@ format(TraceMsg) ->
             {" '--> ~p:~p/~p", [M,F,Arity]};
         %% {trace, Pid, return_from, {M, F, Arity}, ReturnValue}
         {return_from, [{M,F,Arity}, Return]} ->
-            {"~p:~p/~p --> ~p", [M,F,Arity, Return]};
+            {"~p:~p/~p --> ~s", [M,F,Arity, format_trace_output(Return)]};
         %% {trace, Pid, exception_from, {M, F, Arity}, {Class, Value}}
         {exception_from, [{M,F,Arity}, {Class,Val}]} ->
             {"~p:~p/~p ~p ~p", [M,F,Arity, Class, Val]};
@@ -598,10 +605,38 @@ to_hms(_) ->
     {0,0,0}.
 
 format_args(Arity) when is_integer(Arity) ->
-    "/"++integer_to_list(Arity);
+    [$/, integer_to_list(Arity)];
 format_args(Args) when is_list(Args) ->
-    "("++string:join([io_lib:format("~p", [Arg]) || Arg <- Args], ", ")++")".
+    Active = recon_rec:is_active(),
+    [$(, join(", ", [format_trace_output(Active, Arg) || Arg <- Args]), $)].
 
+
+%% @doc formats call arguments and return values - most types are just printed out, except for
+%% tuples recognised as records, which mimic the source code syntax
+%% @end
+format_trace_output(Args) ->
+    format_trace_output(recon_rec:is_active(), Args).
+
+format_trace_output(true, Args) when is_tuple(Args) ->
+    recon_rec:format_tuple(Args);
+format_trace_output(true, Args) when is_list(Args) ->
+    case io_lib:printable_list(Args) of
+        true ->
+            io_lib:format("~p", [Args]);
+        false ->
+            L = lists:map(fun(A) -> format_trace_output(true, A) end, Args),
+            [$[, join(", ", L), $]]
+    end;
+format_trace_output(true, Args) when is_map(Args) ->
+    ItemList = maps:to_list(Args),
+    ["#{",
+        join(", ", [format_kv(Key, Val) || {Key, Val} <- ItemList]),
+    "}"];
+format_trace_output(_, Args) ->
+    io_lib:format("~p", [Args]).
+
+format_kv(Key, Val) ->
+    [format_trace_output(true, Key), "=", format_trace_output(true, Val)].
 
 %%%%%%%%%%%%%%%
 %%% HELPERS %%%
@@ -642,3 +677,13 @@ fun_to_ms(ShellFun) when is_function(ShellFun) ->
         false ->
             exit(shell_funs_only)
     end.
+
+-ifdef(OTP_RELEASE).
+-spec join(term(), [term()]) -> [term()].
+join(Sep, List) ->
+    lists:join(Sep, List).
+-else.
+-spec join(string(), [string()]) -> string().
+join(Sep, List) ->
+    string:join(List, Sep).
+-endif.

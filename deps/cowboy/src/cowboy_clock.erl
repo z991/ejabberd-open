@@ -1,4 +1,4 @@
-%% Copyright (c) 2011-2014, Loïc Hoguin <essen@ninenines.eu>
+%% Copyright (c) 2011-2017, Loïc Hoguin <essen@ninenines.eu>
 %%
 %% Permission to use, copy, modify, and/or distribute this software for any
 %% purpose with or without fee is hereby granted, provided that the above
@@ -36,7 +36,7 @@
 -record(state, {
 	universaltime = undefined :: undefined | calendar:datetime(),
 	rfc1123 = <<>> :: binary(),
-	tref = undefined :: undefined | timer:tref()
+	tref = undefined :: undefined | reference()
 }).
 
 %% API.
@@ -49,9 +49,17 @@ start_link() ->
 stop() ->
 	gen_server:call(?MODULE, stop).
 
+%% When the ets table doesn't exist, either because of a bug
+%% or because Cowboy is being restarted, we perform in a
+%% slightly degraded state and build a new timestamp for
+%% every request.
 -spec rfc1123() -> binary().
 rfc1123() ->
-	ets:lookup_element(?MODULE, rfc1123, 2).
+	try
+		ets:lookup_element(?MODULE, rfc1123, 2)
+	catch error:badarg ->
+		rfc1123(erlang:universaltime())
+	end.
 
 -spec rfc1123(calendar:datetime()) -> binary().
 rfc1123(DateTime) ->
@@ -65,15 +73,15 @@ init([]) ->
 		named_table, {read_concurrency, true}]),
 	T = erlang:universaltime(),
 	B = update_rfc1123(<<>>, undefined, T),
-	{ok, TRef} = timer:send_interval(1000, update),
+	TRef = erlang:send_after(1000, self(), update),
 	ets:insert(?MODULE, {rfc1123, B}),
 	{ok, #state{universaltime=T, rfc1123=B, tref=TRef}}.
 
--spec handle_call(any(), _, State)
-	-> {reply, ignored, State} | {stop, normal, stopped, State}
+-type from() :: {pid(), term()}.
+-spec handle_call
+	(stop, from(), State) -> {stop, normal, stopped, State}
 	when State::#state{}.
-handle_call(stop, _From, State=#state{tref=TRef}) ->
-	{ok, cancel} = timer:cancel(TRef),
+handle_call(stop, _From, State) ->
 	{stop, normal, stopped, State};
 handle_call(_Request, _From, State) ->
 	{reply, ignored, State}.
@@ -83,10 +91,13 @@ handle_cast(_Msg, State) ->
 	{noreply, State}.
 
 -spec handle_info(any(), State) -> {noreply, State} when State::#state{}.
-handle_info(update, #state{universaltime=Prev, rfc1123=B1, tref=TRef}) ->
+handle_info(update, #state{universaltime=Prev, rfc1123=B1, tref=TRef0}) ->
+	%% Cancel the timer in case an external process sent an update message.
+	_ = erlang:cancel_timer(TRef0),
 	T = erlang:universaltime(),
 	B2 = update_rfc1123(B1, Prev, T),
 	ets:insert(?MODULE, {rfc1123, B2}),
+	TRef = erlang:send_after(1000, self(), update),
 	{noreply, #state{universaltime=T, rfc1123=B2, tref=TRef}};
 handle_info(_Info, State) ->
 	{noreply, State}.

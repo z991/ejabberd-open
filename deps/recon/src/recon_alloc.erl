@@ -335,7 +335,7 @@ average_block_sizes(Keyword) ->
 %% larger than the `sbct', it gets sent to a single block carrier. When the
 %% data is smaller than the `sbct', it gets placed into a multiblock carrier.
 %%
-%% mbcs are to be prefered to sbcs because they basically represent pre-
+%% mbcs are to be preferred to sbcs because they basically represent pre-
 %% allocated memory, whereas sbcs will map to one call to sys_alloc
 %% or mseg_alloc, which is more expensive than redistributing
 %% data that was obtained for multiblock carriers. Moreover, the VM is able to
@@ -380,7 +380,7 @@ allocators() ->
 %% @doc returns a dump of all allocator settings and values modified
 %%      depending on the argument.
 %% <ul>
-%%   <li>`types` report the settings and accumulated values for each
+%%   <li>`types' report the settings and accumulated values for each
 %%       allocator type. This is useful when looking for anomalies
 %%       in the system as a whole and not specific instances.</li>
 %% </ul>

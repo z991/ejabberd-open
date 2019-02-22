@@ -1,5 +1,5 @@
 %%%
-%%%   Copyright (c) 2015 - 2017, Klarna AB
+%%%   Copyright (c) 2015-2018, Klarna Bank AB (publ)
 %%%
 %%%   Licensed under the Apache License, Version 2.0 (the "License");
 %%%   you may not use this file except in compliance with the License.
@@ -13,12 +13,6 @@
 %%%   See the License for the specific language governing permissions and
 %%%   limitations under the License.
 %%%
-
-%%%=============================================================================
-%%% @doc
-%%% @copyright 20150-2016 Klarna AB
-%%% @end
-%%% ============================================================================
 
 %% @private
 -module(brod_consumer_SUITE).
@@ -34,9 +28,10 @@
 
 %% Test cases
 -export([ t_direct_fetch/1
+        , t_direct_fetch_with_small_max_bytes/1
         , t_direct_fetch_expand_max_bytes/1
         , t_consumer_max_bytes_too_small/1
-        , t_consumer_socket_restart/1
+        , t_consumer_connection_restart/1
         , t_consumer_resubscribe/1
         , t_subscriber_restart/1
         , t_subscribe_with_unknown_offset/1
@@ -81,15 +76,11 @@ init_per_testcase(Case, Config0) ->
   ct:pal("=== ~p begin ===", [Case]),
   Client = Case,
   Topic = ?TOPIC,
-  CooldownSecs = 2,
+  CooldownSecs = 1,
   ProducerRestartDelay = 1,
-  ClientConfig = [{reconnect_cool_down_seconds, CooldownSecs}],
+  ClientConfig0 = [{reconnect_cool_down_seconds, CooldownSecs}],
   ProducerConfig = [ {partition_restart_delay_seconds, ProducerRestartDelay}
                    , {max_retries, 0}],
-  brod:stop_client(Client),
-  ok = brod:start_client(?HOSTS, Client, ClientConfig),
-  ok = brod:start_producer(Client, Topic, ProducerConfig),
-  ok = brod:start_consumer(Client, Topic, []),
   Config =
     try
       ?MODULE:Case({init, Config0})
@@ -97,7 +88,18 @@ init_per_testcase(Case, Config0) ->
       error : function_clause ->
         Config0
     end,
-  [{client, Client} | Config].
+  ClientConfig1 = proplists:get_value(client_config, Config, []),
+  brod:stop_client(Client),
+  ClientConfig =
+    case os:getenv("KAFKA_VERSION") of
+      "0.9" ++ _ -> [{query_api_versions, false}];
+      _ -> []
+    end ++ ClientConfig0 ++ ClientConfig1,
+  ok = brod:start_client(?HOSTS, Client, ClientConfig),
+  ok = brod:start_producer(Client, Topic, ProducerConfig),
+  ok = brod:start_consumer(Client, Topic, [{max_wait_time, 1000},
+                                           {sleep_timeout, 0}]),
+  [{client, Client}, {client_config, ClientConfig} | Config].
 
 end_per_testcase(Case, Config) ->
   try
@@ -135,11 +137,32 @@ t_direct_fetch(Config) when is_list(Config) ->
   Value = <<>>,
   ok = brod:produce_sync(Client, ?TOPIC, Partition, Key, Value),
   {ok, Offset} = brod:resolve_offset(?HOSTS, Topic, Partition,
-                                     ?OFFSET_LATEST),
-  {ok, [Msg]} = brod:fetch(?HOSTS, Topic, Partition, Offset - 1),
+                                     ?OFFSET_LATEST, ?config(client_config)),
+  {ok, {_, [Msg]}} = brod:fetch({?HOSTS, ?config(client_config)},
+                                 Topic, Partition, Offset - 1),
   ?assertEqual(Key, Msg#kafka_message.key),
   ok.
 
+t_direct_fetch_with_small_max_bytes(Config) when is_list(Config) ->
+  Client = ?config(client),
+  Topic = ?TOPIC,
+  Partition = 0,
+  Key = make_unique_key(),
+  Value = crypto:strong_rand_bytes(100),
+  ok = brod:produce_sync(Client, ?TOPIC, Partition, Key, Value),
+  {ok, Offset} = brod:resolve_offset(?HOSTS, Topic, Partition,
+                                     ?OFFSET_LATEST, ?config(client_config)),
+  {ok, {_, [Msg]}} =
+    brod:fetch({?HOSTS, ?config(client_config)},
+               Topic, Partition, Offset - 1, #{max_bytes => 1}),
+  ?assertEqual(Key, Msg#kafka_message.key),
+  ok.
+
+t_direct_fetch_expand_max_bytes({init, Config}) when is_list(Config) ->
+  %% kafka returns empty message set when it's 0.9
+  %% or when fetch request sent was version 0
+  %% Avoid querying api version will make brod send v0 requests
+  [{client_config, [{query_api_versions, false}]} | Config];
 t_direct_fetch_expand_max_bytes(Config) when is_list(Config) ->
   Client = ?config(client),
   Topic = ?TOPIC,
@@ -148,20 +171,23 @@ t_direct_fetch_expand_max_bytes(Config) when is_list(Config) ->
   Value = crypto:strong_rand_bytes(100),
   ok = brod:produce_sync(Client, ?TOPIC, Partition, Key, Value),
   {ok, Offset} = brod:resolve_offset(?HOSTS, Topic, Partition,
-                                     ?OFFSET_LATEST),
-  {ok, [Msg]} = brod:fetch(?HOSTS, Topic, Partition, Offset - 1,
-                           _Timeout = 1000, _MinBytes = 0, _MaxBytes = 13),
+                                     ?OFFSET_LATEST, ?config(client_config)),
+  {ok, {_, [Msg]}} = brod:fetch({?HOSTS, ?config(client_config)},
+                                Topic, Partition, Offset - 1,
+                                #{max_bytes => 13}),
   ?assertEqual(Key, Msg#kafka_message.key),
   ok.
 
 %% @doc Consumer should be smart enough to try greater max_bytes
 %% when it's not great enough to fetch one single message
-%% @end
 t_consumer_max_bytes_too_small({init, Config}) ->
-  meck:new(kpro, [passthrough, no_passthrough_cover, no_history]),
-  Config;
+  meck:new(brod_kafka_request, [passthrough, no_passthrough_cover, no_history]),
+  %% kafka returns empty message set when it's 0.9
+  %% or when fetch request sent was version 0
+  %% Avoid querying api version will make brod send v0 requests
+  [{client_config, [{query_api_versions, false}]} | Config];
 t_consumer_max_bytes_too_small({'end', _Config}) ->
-  meck:unload(kpro);
+  meck:unload(brod_kafka_request);
 t_consumer_max_bytes_too_small(Config) ->
   Client = ?config(client),
   Partition = 0,
@@ -170,23 +196,23 @@ t_consumer_max_bytes_too_small(Config) ->
   ValueBytes = 2000,
   MaxBytes1 = 8, %% too small for even the header
   MaxBytes2 = 12, %% too small but message size is fetched
-  %% use the message size
-  %% 34 is the magic number for kafka 0.10
-  MaxBytes3 = size(Key) + ValueBytes + 34,
+  MaxBytes3 = size(Key) + ValueBytes,
   Tester = self(),
-  F = fun(Vsn, Topic, Partition1, BeginOffset, MaxWait, MinBytes, MaxBytes) ->
+  F = fun(Conn, Topic, Partition1, BeginOffset, MaxWait, MinBytes, MaxBytes) ->
         Tester ! {max_bytes, MaxBytes},
-        meck:passthrough([Vsn, Topic, Partition1, BeginOffset,
+        meck:passthrough([Conn, Topic, Partition1, BeginOffset,
                           MaxWait, MinBytes, MaxBytes])
       end,
   %% Expect the fetch_request construction function called twice
-  meck:expect(kpro, fetch_request, F),
+  meck:expect(brod_kafka_request, fetch, F),
   Value = make_bytes(ValueBytes),
   Options = [{max_bytes, MaxBytes1}],
   {ok, ConsumerPid} =
     brod:subscribe(Client, self(), ?TOPIC, Partition, Options),
   ok = brod:produce_sync(Client, ?TOPIC, Partition, Key, Value),
-  ok = wait_for_max_bytes_sequence([MaxBytes1, MaxBytes2, MaxBytes3],
+  ok = wait_for_max_bytes_sequence([{'=', MaxBytes1},
+                                    {'=', MaxBytes2},
+                                    {'>', MaxBytes3}],
                                    _TriedCount = 0),
   ?WAIT({ConsumerPid, #kafka_message_set{messages = Messages}},
         begin
@@ -195,17 +221,15 @@ t_consumer_max_bytes_too_small(Config) ->
           ?assertEqual(Value, ValueReceived)
         end).
 
-%% @doc Consumer shoud auto recover from socket down, subscriber should not
+%% @doc Consumer shoud auto recover from connection down, subscriber should not
 %% notice a thing except for a few seconds of break in data streaming
-%% @end
-t_consumer_socket_restart(Config) ->
+t_consumer_connection_restart(Config) ->
   Client = ?config(client),
   Topic = ?TOPIC,
   Partition = 0,
   ProduceFun =
     fun(I) ->
-      Key = list_to_binary(integer_to_list(I)),
-      Value = Key,
+      Value = Key= integer_to_binary(I),
       brod:produce_sync(Client, Topic, Partition, Key, Value)
     end,
   Parent = self(),
@@ -230,9 +254,8 @@ t_consumer_socket_restart(Config) ->
   after 1000 ->
     ct:fail("timed out waiting for seqno producer loop to start")
   end,
-  {ok, SocketPid} =
-    brod_client:get_leader_connection(Client, Topic, Partition),
-  exit(SocketPid, kill),
+  {ok, ConnPid} = brod_client:get_leader_connection(Client, Topic, Partition),
+  exit(ConnPid, kill),
   receive
     {produce_result_change, ProducerPid, error} ->
       ok
@@ -266,15 +289,13 @@ t_consumer_socket_restart(Config) ->
 
 %% @doc Data stream should resume after re-subscribe starting from the
 %% the last acked offset
-%% @end
 t_consumer_resubscribe(Config) when is_list(Config) ->
   Client = ?config(client),
   Topic = ?TOPIC,
   Partition = 0,
   ProduceFun =
     fun(I) ->
-      Key = list_to_binary(integer_to_list(I)),
-      Value = Key,
+      Value = Key = integer_to_binary(I),
       brod:produce_sync(Client, Topic, Partition, Key, Value)
     end,
   ReceiveFun =
@@ -318,8 +339,7 @@ t_subscriber_restart(Config) when is_list(Config) ->
   Partition = 0,
   ProduceFun =
     fun(I) ->
-      Key = list_to_binary(integer_to_list(I)),
-      Value = Key,
+      Value = Key = integer_to_binary(I),
       brod:produce_sync(Client, Topic, Partition, Key, Value)
     end,
   Parent = self(),
@@ -334,8 +354,7 @@ t_subscriber_restart(Config) when is_list(Config) ->
                         , key    = SeqNoBin
                         , value  = SeqNoBin
                         } = hd(Messages),
-          SeqNo = list_to_integer(binary_to_list(SeqNoBin)),
-          Parent ! {self(), SeqNo},
+          Parent ! {self(), binary_to_integer(SeqNoBin)},
           ok = brod:consume_ack(ConsumerPid, Offset),
           exit(normal)
       after 2000 ->
@@ -343,28 +362,21 @@ t_subscriber_restart(Config) when is_list(Config) ->
         exit(timeout)
       end
     end,
-  Subscriber0 = erlang:spawn_link(SubscriberFun),
+  {Subscriber0, _} = erlang:spawn_monitor(SubscriberFun),
   receive {subscribed, Subscriber0} -> ok end,
   ReceiveFun =
     fun(Subscriber, ExpectedSeqNo) ->
-      receive
-        {Subscriber, ExpectedSeqNo} ->
-          ok
-      after 3000 ->
-        ct:fail("timed out receiving seqno ~p", [ExpectedSeqNo])
+      receive {Subscriber, ExpectedSeqNo} -> ok
+      after 3000 -> ct:fail("timed out receiving seqno ~p", [ExpectedSeqNo])
       end
     end,
   ok = ProduceFun(0),
   ok = ProduceFun(1),
   ok = ReceiveFun(Subscriber0, 0),
-  Mref = erlang:monitor(process, Subscriber0),
-  receive
-    {'DOWN', Mref, process, Subscriber0, normal} ->
-      ok
-    after 1000 ->
-      ct:fail("timed out waiting for Subscriber0 to exit")
+  receive {'DOWN', _, process, Subscriber0, normal} -> ok
+  after 2000 -> ct:fail("timed out waiting for Subscriber0 to exit")
   end,
-  Subscriber1 = erlang:spawn_link(SubscriberFun),
+  {Subscriber1, _} = erlang:spawn_monitor(SubscriberFun),
   receive {subscribed, Subscriber1} -> ok end,
   ok = ReceiveFun(Subscriber1, 1),
   ok.
@@ -407,9 +419,8 @@ t_offset_reset_policy(Config) when is_list(Config) ->
 
 %%%_* Help functions ===========================================================
 
-%% @private Expecting sequence numbers delivered from kafka
+%% Expecting sequence numbers delivered from kafka
 %% not expecting any error messages.
-%% @end
 seqno_consumer_loop(ExitSeqNo, ExitSeqNo) ->
   %% we have verified all sequence numbers, time to exit
   exit(normal);
@@ -431,10 +442,9 @@ seqno_consumer_loop(ExpectedSeqNo, ExitSeqNo) ->
       exit({"unexpected message received", Msg})
   end.
 
-%% @private Verify if a received sequence number list is as expected
+%% Verify if a received sequence number list is as expected
 %% sequence numbers are allowed to get redelivered,
 %% but should not be re-ordered.
-%% @end
 verify_seqno(SeqNo, []) ->
   SeqNo + 1;
 verify_seqno(SeqNo, [X | _] = SeqNoList) when X < SeqNo ->
@@ -444,9 +454,8 @@ verify_seqno(SeqNo, [SeqNo | Rest]) ->
 verify_seqno(SeqNo, SeqNoList) ->
   exit({"sequence number received is not as expected", SeqNo, SeqNoList}).
 
-%% @private Produce sequence numbers in a retry loop.
+%% Produce sequence numbers in a retry loop.
 %% Report produce API return value pattern changes to parent pid
-%% @end
 seqno_producer_loop(ProduceFun, SeqNo, LastResult, Parent) ->
   {Result, NextSeqNo} =
     case ProduceFun(SeqNo) of
@@ -492,15 +501,20 @@ wait_for_max_bytes_sequence([], _Cnt) ->
 wait_for_max_bytes_sequence(_, 10) ->
   %% default sleep is 1 second, makes no sese to wait longer
   erlang:error(timeout);
-wait_for_max_bytes_sequence([MaxBytes | Rest] = Waiting, Cnt) ->
+wait_for_max_bytes_sequence([{Compare, MaxBytes} | Rest] = Waiting, Cnt) ->
   receive
-    {max_bytes, MaxBytes} ->
-      wait_for_max_bytes_sequence(Rest, 0);
-    {max_bytes, Old} when Old < MaxBytes ->
-      %% still trying the old amx_bytes
-      wait_for_max_bytes_sequence(Waiting, Cnt + 1);
-    {max_bytes, Other} ->
-      ct:fail("unexpected ~p", [Other])
+    {max_bytes, Bytes} ->
+      case Compare of
+        '=' when Bytes =:= MaxBytes ->
+          wait_for_max_bytes_sequence(Rest, 0);
+        '>' when Bytes > MaxBytes ->
+          wait_for_max_bytes_sequence(Rest, 0);
+        _ when Bytes < MaxBytes ->
+          %% still trying the old amx_bytes
+          wait_for_max_bytes_sequence(Waiting, Cnt + 1);
+        _ ->
+          ct:fail("unexpected ~p, expecting ~p", [Bytes, {Compare, MaxBytes}])
+      end
   after
     3000 ->
       ct:fail("timeout", [])

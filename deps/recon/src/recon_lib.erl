@@ -77,8 +77,11 @@ port_list(Attr, Val) ->
 %% all processes of the node, except the caller.
 -spec proc_attrs(term()) -> [recon:proc_attrs()].
 proc_attrs(AttrName) ->
-    [Attrs || Pid <- processes() -- [self()],
-              {ok, Attrs} <- [proc_attrs(AttrName, Pid)]].
+    Self = self(),
+    [Attrs || Pid <- processes(),
+	      Pid =/= Self,
+              {ok, Attrs} <- [proc_attrs(AttrName, Pid)]
+	].
 
 %% @doc Returns the attributes of a given process. This form of attributes
 %% is standard for most comparison functions for processes in recon.
@@ -205,8 +208,8 @@ time_map(N, Interval, Fun, State, MapFun) ->
 time_fold(0, _, _, _, _, Acc) ->
     Acc;
 time_fold(N, Interval, Fun, State, FoldFun, Init) ->
-    {Res, NewState} = Fun(State),
     timer:sleep(Interval),
+    {Res, NewState} = Fun(State),
     Acc = FoldFun(Res,Init),
     time_fold(N-1,Interval,Fun,NewState,FoldFun,Acc).
 
@@ -278,3 +281,5 @@ merge(H1, [E2|H2]) -> [E2, H1|H2].
 merge_pairs([]) -> [];
 merge_pairs([H]) -> H;
 merge_pairs([A, B|T]) -> merge(merge(A, B), merge_pairs(T)).
+
+

@@ -1,4 +1,4 @@
-%% Copyright (c) 2011-2014, Loïc Hoguin <essen@ninenines.eu>
+%% Copyright (c) 2011-2018, Loïc Hoguin <essen@ninenines.eu>
 %%
 %% Permission to use, copy, modify, and/or distribute this software for any
 %% purpose with or without fee is hereby granted, provided that the above
@@ -15,82 +15,116 @@
 -module(ranch_ssl).
 -behaviour(ranch_transport).
 
+-ifdef(OTP_RELEASE).
+-compile({nowarn_deprecated_function, [{ssl, ssl_accept, 3}]}).
+-endif.
+
 -export([name/0]).
+-export([secure/0]).
 -export([messages/0]).
 -export([listen/1]).
+-export([disallowed_listen_options/0]).
 -export([accept/2]).
 -export([accept_ack/2]).
+-export([handshake/3]).
 -export([connect/3]).
 -export([connect/4]).
 -export([recv/3]).
+-export([recv_proxy_header/2]).
 -export([send/2]).
 -export([sendfile/2]).
 -export([sendfile/4]).
 -export([sendfile/5]).
 -export([setopts/2]).
+-export([getopts/2]).
+-export([getstat/1]).
+-export([getstat/2]).
 -export([controlling_process/2]).
 -export([peername/1]).
 -export([sockname/1]).
 -export([shutdown/2]).
 -export([close/1]).
 
--type opts() :: [{backlog, non_neg_integer()}
+-type ssl_opt() :: {alpn_preferred_protocols, [binary()]}
+	| {beast_mitigation, one_n_minus_one | zero_n | disabled}
 	| {cacertfile, string()}
-	| {cacerts, [Der::binary()]}
-	| {cert, Der::binary()}
+	| {cacerts, [public_key:der_encoded()]}
+	| {cert, public_key:der_encoded()}
 	| {certfile, string()}
-	| {ciphers, [ssl:erl_cipher_suite()] | string()}
+	| {ciphers, [ssl_cipher:erl_cipher_suite()]}
+	| {client_renegotiation, boolean()}
+	| {crl_cache, {module(), {internal | any(), list()}}}
+	| {crl_check, boolean() | peer | best_effort}
+	| {depth, 0..255}
+	| {dh, public_key:der_encoded()}
+	| {dhfile, string()}
 	| {fail_if_no_peer_cert, boolean()}
 	| {hibernate_after, integer() | undefined}
 	| {honor_cipher_order, boolean()}
-	| {ip, inet:ip_address()}
-	| {key, Der::binary()}
+	| {key, {'RSAPrivateKey' | 'DSAPrivateKey' | 'PrivateKeyInfo', public_key:der_encoded()}}
 	| {keyfile, string()}
-	| {linger, {boolean(), non_neg_integer()}}
 	| {log_alert, boolean()}
 	| {next_protocols_advertised, [binary()]}
-	| {nodelay, boolean()}
+	| {padding_check, boolean()}
+	| {partial_chain, fun(([public_key:der_encoded()]) -> {trusted_ca, public_key:der_encoded()} | unknown_ca)}
 	| {password, string()}
-	| {port, inet:port_number()}
-	| {raw, non_neg_integer(), non_neg_integer(),
-		non_neg_integer() | binary()}
+	| {psk_identity, string()}
 	| {reuse_session, fun()}
 	| {reuse_sessions, boolean()}
 	| {secure_renegotiate, boolean()}
-	| {send_timeout, timeout()}
-	| {send_timeout_close, boolean()}
-	| {verify, ssl:verify_type()}
-	| {verify_fun, {fun(), InitialUserState::term()}}
-	| {versions, [atom()]}].
+	| {signature_algs, [{atom(), atom()}]}
+	| {sni_fun, fun()}
+	| {sni_hosts, [{string(), ssl_opt()}]}
+	| {user_lookup_fun, {fun(), any()}}
+	| {v2_hello_compatible, boolean()}
+	| {verify, verify_none | verify_peer}
+	| {verify_fun, {fun(), any()}}
+	| {versions, [atom()]}.
+-export_type([ssl_opt/0]).
+
+-type opt() :: ranch_tcp:opt() | ssl_opt().
+-export_type([opt/0]).
+
+-type opts() :: [opt()].
 -export_type([opts/0]).
 
 name() -> ssl.
+
+-spec secure() -> boolean().
+secure() ->
+    true.
 
 messages() -> {ssl, ssl_closed, ssl_error}.
 
 -spec listen(opts()) -> {ok, ssl:sslsocket()} | {error, atom()}.
 listen(Opts) ->
-	ranch:require([crypto, asn1, public_key, ssl]),
-	true = lists:keymember(cert, 1, Opts)
-		orelse lists:keymember(certfile, 1, Opts),
-	Opts2 = ranch:set_option_default(Opts, backlog, 1024),
+	case lists:keymember(cert, 1, Opts)
+			orelse lists:keymember(certfile, 1, Opts)
+			orelse lists:keymember(sni_fun, 1, Opts)
+			orelse lists:keymember(sni_hosts, 1, Opts) of
+		true ->
+			do_listen(Opts);
+		false ->
+			{error, no_cert}
+	end.
+
+do_listen(Opts0) ->
+	Opts1 = ranch:set_option_default(Opts0, backlog, 1024),
+	Opts2 = ranch:set_option_default(Opts1, nodelay, true),
 	Opts3 = ranch:set_option_default(Opts2, send_timeout, 30000),
-	Opts4 = ranch:set_option_default(Opts3, send_timeout_close, true),
-	Opts5 = ranch:set_option_default(Opts4, ciphers, unbroken_cipher_suites()),
+	Opts = ranch:set_option_default(Opts3, send_timeout_close, true),
 	%% We set the port to 0 because it is given in the Opts directly.
 	%% The port in the options takes precedence over the one in the
 	%% first argument.
-	ssl:listen(0, ranch:filter_options(Opts5,
-		[backlog, cacertfile, cacerts, cert, certfile, ciphers,
-			fail_if_no_peer_cert, hibernate_after,
-			honor_cipher_order, ip, key, keyfile, linger,
-			next_protocols_advertised, nodelay,
-			log_alert, password, port, raw,
-			reuse_session, reuse_sessions, secure_renegotiate,
-			send_timeout, send_timeout_close, verify, verify_fun,
-			versions],
-		[binary, {active, false}, {packet, raw},
-			{reuseaddr, true}, {nodelay, true}])).
+	ssl:listen(0, ranch:filter_options(Opts, disallowed_listen_options(),
+		[binary, {active, false}, {packet, raw}, {reuseaddr, true}])).
+
+%% 'binary' and 'list' are disallowed but they are handled
+%% specifically as they do not have 2-tuple equivalents.
+disallowed_listen_options() ->
+	[alpn_advertised_protocols, client_preferred_next_protocols,
+		fallback, server_name_indication, srp_identity
+		|ranch_tcp:disallowed_listen_options()].
 
 -spec accept(ssl:sslsocket(), timeout())
 	-> {ok, ssl:sslsocket()} | {error, closed | timeout | atom()}.
@@ -99,20 +133,19 @@ accept(LSocket, Timeout) ->
 
 -spec accept_ack(ssl:sslsocket(), timeout()) -> ok.
 accept_ack(CSocket, Timeout) ->
-	case ssl:ssl_accept(CSocket, Timeout) of
+	{ok, _} = handshake(CSocket, [], Timeout),
+	ok.
+
+-spec handshake(inet:socket() | ssl:sslsocket(), opts(), timeout())
+	-> {ok, ssl:sslsocket()} | {error, any()}.
+handshake(CSocket, Opts, Timeout) ->
+	case ssl:ssl_accept(CSocket, Opts, Timeout) of
 		ok ->
-			ok;
-		%% Garbage was most likely sent to the socket, don't error out.
-		{error, {tls_alert, _}} ->
-			ok = close(CSocket),
-			exit(normal);
-		%% Socket most likely stopped responding, don't error out.
-		{error, timeout} ->
-			ok = close(CSocket),
-			exit(normal);
-		{error, Reason} ->
-			ok = close(CSocket),
-			error(Reason)
+			{ok, CSocket};
+		{ok, NewSocket} ->
+			{ok, NewSocket};
+		Error = {error, _} ->
+			Error
 	end.
 
 %% @todo Probably filter Opts?
@@ -136,6 +169,19 @@ connect(Host, Port, Opts, Timeout) when is_integer(Port) ->
 	-> {ok, any()} | {error, closed | atom()}.
 recv(Socket, Length, Timeout) ->
 	ssl:recv(Socket, Length, Timeout).
+
+-spec recv_proxy_header(ssl:sslsocket(), timeout())
+	-> {ok, ranch_proxy_header:proxy_info()}
+	| {error, closed | atom()}
+	| {error, protocol_error, atom()}.
+recv_proxy_header(SSLSocket, Timeout) ->
+	%% There's currently no documented way to perform a TCP recv
+	%% on an sslsocket(), even before the TLS handshake. However
+	%% nothing prevents us from retrieving the TCP socket and using
+	%% it. Since it's an undocumented interface this may however
+	%% make forward-compatibility more difficult.
+	{sslsocket, {gen_tcp, TCPSocket, _, _}, _} = SSLSocket,
+	ranch_tcp:recv_proxy_header(TCPSocket, Timeout).
 
 -spec send(ssl:sslsocket(), iodata()) -> ok | {error, atom()}.
 send(Socket, Packet) ->
@@ -166,6 +212,18 @@ sendfile(Socket, File, Offset, Bytes, Opts) ->
 setopts(Socket, Opts) ->
 	ssl:setopts(Socket, Opts).
 
+-spec getopts(ssl:sslsocket(), [atom()]) -> {ok, list()} | {error, atom()}.
+getopts(Socket, Opts) ->
+	ssl:getopts(Socket, Opts).
+
+-spec getstat(ssl:sslsocket()) -> {ok, list()} | {error, atom()}.
+getstat(Socket) ->
+	ssl:getstat(Socket).
+
+-spec getstat(ssl:sslsocket(), [atom()]) -> {ok, list()} | {error, atom()}.
+getstat(Socket, OptionNames) ->
+	ssl:getstat(Socket, OptionNames).
+
 -spec controlling_process(ssl:sslsocket(), pid())
 	-> ok | {error, closed | not_owner | atom()}.
 controlling_process(Socket, Pid) ->
@@ -189,22 +247,3 @@ shutdown(Socket, How) ->
 -spec close(ssl:sslsocket()) -> ok.
 close(Socket) ->
 	ssl:close(Socket).
-
-%% Internal.
-
-%% Unfortunately the implementation of elliptic-curve ciphers that has
-%% been introduced in R16B01 is incomplete.  Depending on the particular
-%% client, this can cause the TLS handshake to break during key
-%% agreement.  Depending on the ssl application version, this function
-%% returns a list of all cipher suites that are supported by default,
-%% minus the elliptic-curve ones.
--spec unbroken_cipher_suites() -> [ssl:erl_cipher_suite()].
-unbroken_cipher_suites() ->
-	case proplists:get_value(ssl_app, ssl:versions()) of
-		Version when Version =:= "5.3"; Version =:= "5.3.1" ->
-			lists:filter(fun(Suite) ->
-				string:left(atom_to_list(element(1, Suite)), 4) =/= "ecdh"
-			end, ssl:cipher_suites());
-		_ ->
-			ssl:cipher_suites()
-	end.

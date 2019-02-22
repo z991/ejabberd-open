@@ -92,13 +92,16 @@
 %%====================================================================
 start_link(Host, Opts) ->
     Proc = gen_mod:get_module_proc(Host, ?PROCNAME),
+    ?ERROR_MSG("the xxxxxx~n", []),
     gen_server:start_link({local, Proc}, ?MODULE,
 			  [Host, Opts], []).
 
 start(Host, Opts) ->
     Proc = gen_mod:get_module_proc(Host, ?PROCNAME),
+    ?ERROR_MSG("the xxxxxx~n", []),
     ChildSpec = {Proc, {?MODULE, start_link, [Host, Opts]},
 		 transient, 1000, worker, [?MODULE]},
+    ?ERROR_MSG("the xxxxxx~n", []),
     supervisor:start_child(ejabberd_sup, ChildSpec).
 
 stop(Host) ->
@@ -267,8 +270,10 @@ init([Host, Opts]) ->
 %    ejabberd_router:register_route(MyHost, Host),
     ejabberd_router:register_route(MyHost,Host, {apply, ?MODULE, route}),
 
+    ?ERROR_MSG("the xxxxxx~n", []),
     load_permanent_rooms_affiliations(Host,MyHost),
 
+    ?ERROR_MSG("the xxxxxx~n", []),
     {ok, #state{host = MyHost,
 		server_host = Host,
 		access = {Access, AccessCreate, AccessAdmin, AccessPersistent},
@@ -324,7 +329,8 @@ handle_info({update_user_affiliation,Method,Muc,Jid,Aff},State) ->
     {noreply, State};
 handle_info(_Info, State) -> {noreply, State}.
 
-terminate(_Reason, State) ->
+terminate(Reason, State) ->
+    ?ERROR_MSG("the terminate reason is ~p~n", [{Reason, State}]),
     ejabberd_router:unregister_route(State#state.host),
     ok.
 

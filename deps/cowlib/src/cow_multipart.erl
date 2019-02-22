@@ -1,4 +1,4 @@
-%% Copyright (c) 2014, Loïc Hoguin <essen@ninenines.eu>
+%% Copyright (c) 2014-2018, Loïc Hoguin <essen@ninenines.eu>
 %%
 %% Permission to use, copy, modify, and/or distribute this software for any
 %% purpose with or without fee is hereby granted, provided that the above
@@ -47,7 +47,7 @@
 	"\r\n"
 	"PGh0bWw+CiAgPGhlYWQ+CiAgPC9oZWFkPgogIDxib2R5PgogICAgPHA+VGhpcyBpcyB0aGUg\r\n"
 	"Ym9keSBvZiB0aGUgbWVzc2FnZS48L3A+CiAgPC9ib2R5Pgo8L2h0bWw+Cg==\r\n"
-	"--frontier--\r\n"
+	"--frontier--"
 >>).
 -define(TEST1_BOUNDARY, <<"frontier">>).
 
@@ -72,9 +72,54 @@
 	"\r\n"
 	"...contents of file2.gif...\r\n"
 	"--BbC04y--\r\n"
-	"--AaB03x--\r\n"
+	"--AaB03x--"
 >>).
 -define(TEST2_BOUNDARY, <<"AaB03x">>).
+
+-define(TEST3_MIME, <<
+	"This is the preamble.\r\n"
+	"--boundary\r\n"
+	"Content-Type: text/plain\r\n"
+	"\r\n"
+	"This is the body of the message.\r\n"
+	"--boundary--"
+	"\r\nThis is the epilogue. Here it includes leading CRLF"
+>>).
+-define(TEST3_BOUNDARY, <<"boundary">>).
+
+-define(TEST4_MIME, <<
+	"This is the preamble.\r\n"
+	"--boundary\r\n"
+	"Content-Type: text/plain\r\n"
+	"\r\n"
+	"This is the body of the message.\r\n"
+	"--boundary--"
+	"\r\n"
+>>).
+-define(TEST4_BOUNDARY, <<"boundary">>).
+
+%% RFC 2046, Section 5.1.1
+-define(TEST5_MIME, <<
+        "This is the preamble.  It is to be ignored, though it\r\n"
+        "is a handy place for composition agents to include an\r\n"
+        "explanatory note to non-MIME conformant readers.\r\n"
+        "\r\n"
+        "--simple boundary\r\n",
+        "\r\n"
+        "This is implicitly typed plain US-ASCII text.\r\n"
+        "It does NOT end with a linebreak."
+        "\r\n"
+        "--simple boundary\r\n",
+        "Content-type: text/plain; charset=us-ascii\r\n"
+        "\r\n"
+        "This is explicitly typed plain US-ASCII text.\r\n"
+        "It DOES end with a linebreak.\r\n"
+        "\r\n"
+        "--simple boundary--\r\n"
+        "\r\n"
+        "This is the epilogue.  It is also to be ignored."
+>>).
+-define(TEST5_BOUNDARY, <<"simple boundary">>).
 
 %% Parsing.
 %%
@@ -98,7 +143,7 @@ parse_headers(<< "--", Stream/bits >>, Boundary) ->
 	BoundarySize = byte_size(Boundary),
 	case Stream of
 		%% Last boundary. Return the epilogue.
-		<< Boundary:BoundarySize/binary, "--\r\n", Stream2/bits >> ->
+		<< Boundary:BoundarySize/binary, "--", Stream2/bits >> ->
 			{done, Stream2};
 		<< Boundary:BoundarySize/binary, Stream2/bits >> ->
 			%% We have all the headers only if there is a \r\n\r\n
@@ -144,7 +189,7 @@ skip_preamble(Stream, Boundary) ->
 			<< _:Start2/binary, Stream2/bits >> = Stream,
 			case Stream2 of
 				%% Last boundary. Return the epilogue.
-				<< "--\r\n", Stream3/bits >> ->
+				<< "--", Stream3/bits >> ->
 					{done, Stream3};
 				_ ->
 					case binary:match(Stream, <<"\r\n\r\n">>) of
@@ -157,12 +202,11 @@ skip_preamble(Stream, Boundary) ->
 			end
 	end.
 
-%% There is a line break right after the boundary, skip it.
-%%
-%% We only skip it now because there might be no headers at all,
-%% which means the \r\n\r\n indicating the end of headers also
-%% includes this line break.
+before_parse_headers(<< "\r\n\r\n", Stream/bits >>) ->
+	%% This indicates that there are no headers, so we can abort immediately.
+	{ok, [], Stream};
 before_parse_headers(<< "\r\n", Stream/bits >>) ->
+	%% There is a line break right after the boundary, skip it.
 	parse_hd_name(Stream, [], <<>>).
 
 parse_hd_name(<< C, Rest/bits >>, H, SoFar) ->
@@ -170,7 +214,7 @@ parse_hd_name(<< C, Rest/bits >>, H, SoFar) ->
 		$: -> parse_hd_before_value(Rest, H, SoFar);
 		$\s -> parse_hd_name_ws(Rest, H, SoFar);
 		$\t -> parse_hd_name_ws(Rest, H, SoFar);
-		?INLINE_LOWERCASE(parse_hd_name, Rest, H, SoFar)
+		_ -> ?LOWER(parse_hd_name, Rest, H, SoFar)
 	end.
 
 parse_hd_name_ws(<< C, Rest/bits >>, H, Name) ->
@@ -298,6 +342,41 @@ parse_interleaved_test() ->
 	{done, <<>>} = parse_headers(Rest4, ?TEST2_BOUNDARY),
 	ok.
 
+parse_epilogue_test() ->
+	H1 = [{<<"content-type">>, <<"text/plain">>}],
+	Body1 = <<"This is the body of the message.">>,
+	Epilogue = <<"\r\nThis is the epilogue. Here it includes leading CRLF">>,
+	{ok, H1, Rest} = parse_headers(?TEST3_MIME, ?TEST3_BOUNDARY),
+	{done, Body1, Rest2} = parse_body(Rest, ?TEST3_BOUNDARY),
+	done = parse_body(Rest2, ?TEST3_BOUNDARY),
+	{done, Epilogue} = parse_headers(Rest2, ?TEST3_BOUNDARY),
+	ok.
+
+parse_epilogue_crlf_test() ->
+	H1 = [{<<"content-type">>, <<"text/plain">>}],
+	Body1 = <<"This is the body of the message.">>,
+	Epilogue = <<"\r\n">>,
+	{ok, H1, Rest} = parse_headers(?TEST4_MIME, ?TEST4_BOUNDARY),
+	{done, Body1, Rest2} = parse_body(Rest, ?TEST4_BOUNDARY),
+	done = parse_body(Rest2, ?TEST4_BOUNDARY),
+	{done, Epilogue} = parse_headers(Rest2, ?TEST4_BOUNDARY),
+	ok.
+
+parse_rfc2046_test() ->
+	%% The following is an example included in RFC 2046, Section 5.1.1.
+	Body1 = <<"This is implicitly typed plain US-ASCII text.\r\n"
+		"It does NOT end with a linebreak.">>,
+	Body2 = <<"This is explicitly typed plain US-ASCII text.\r\n"
+		"It DOES end with a linebreak.\r\n">>,
+	H2 = [{<<"content-type">>, <<"text/plain; charset=us-ascii">>}],
+	Epilogue = <<"\r\n\r\nThis is the epilogue.  It is also to be ignored.">>,
+	{ok, [], Rest} = parse_headers(?TEST5_MIME, ?TEST5_BOUNDARY),
+	{done, Body1, Rest2} = parse_body(Rest, ?TEST5_BOUNDARY),
+	{ok, H2, Rest3} = parse_headers(Rest2, ?TEST5_BOUNDARY),
+	{done, Body2, Rest4} = parse_body(Rest3, ?TEST5_BOUNDARY),
+	{done, Epilogue} = parse_headers(Rest4, ?TEST5_BOUNDARY),
+	ok.
+
 parse_partial_test() ->
 	{ok, <<0:8000, "abcdef">>, <<"\rghij">>}
 		= parse_body(<<0:8000, "abcdef\rghij">>, <<"boundary">>),
@@ -320,9 +399,7 @@ parse_partial_test() ->
 	{ok, <<"boundary">>, <<"\r\n--">>}
 		= parse_body(<<"boundary\r\n--">>, <<"boundary">>),
 	ok.
--endif.
 
--ifdef(PERF).
 perf_parse_multipart(Stream, Boundary) ->
 	case parse_headers(Stream, Boundary) of
 		{ok, _, Rest} ->
@@ -347,7 +424,7 @@ horse_parse() ->
 
 -spec boundary() -> binary().
 boundary() ->
-	base64:encode(crypto:rand_bytes(48)).
+	cow_base64url:encode(crypto:strong_rand_bytes(48), #{padding => false}).
 
 %% @doc Return the first part's head.
 %%
@@ -376,7 +453,7 @@ headers_to_iolist([{N, V}|Tail], Acc) ->
 
 -spec close(binary()) -> iodata().
 close(Boundary) ->
-	[<<"\r\n--">>, Boundary, <<"--\r\n">>].
+	[<<"\r\n--">>, Boundary, <<"--">>].
 
 -ifdef(TEST).
 build_test() ->
@@ -419,9 +496,7 @@ identity_test() ->
 	{done, Body2, M6} = parse_body(M5, B),
 	{done, Epilogue} = parse_headers(M6, B),
 	ok.
--endif.
 
--ifdef(PERF).
 perf_build_multipart() ->
 	B = boundary(),
 	[
@@ -448,9 +523,11 @@ horse_build() ->
 %% @doc Convenience function for extracting information from headers
 %% when parsing a multipart/form-data stream.
 
--spec form_data(headers())
+-spec form_data(headers() | #{binary() => binary()})
 	-> {data, binary()}
-	| {file, binary(), binary(), binary(), binary()}.
+	| {file, binary(), binary(), binary()}.
+form_data(Headers) when is_map(Headers) ->
+	form_data(maps:to_list(Headers));
 form_data(Headers) ->
 	{_, DispositionBin} = lists:keyfind(<<"content-disposition">>, 1, Headers),
 	{<<"form-data">>, Params} = parse_content_disposition(DispositionBin),
@@ -463,12 +540,7 @@ form_data(Headers) ->
 				false -> <<"text/plain">>;
 				{_, T} -> T
 			end,
-			TransferEncoding = case lists:keyfind(
-					<<"content-transfer-encoding">>, 1, Headers) of
-				false -> <<"7bit">>;
-				{_, TE} -> TE
-			end,
-			{file, FieldName, Filename, Type, TransferEncoding}
+			{file, FieldName, Filename, Type}
 	end.
 
 -ifdef(TEST).
@@ -479,8 +551,7 @@ form_data_test_() ->
 		{[{<<"content-disposition">>,
 				<<"form-data; name=\"files\"; filename=\"file1.txt\"">>},
 			{<<"content-type">>, <<"text/x-plain">>}],
-			{file, <<"files">>, <<"file1.txt">>,
-				<<"text/x-plain">>, <<"7bit">>}}
+			{file, <<"files">>, <<"file1.txt">>, <<"text/x-plain">>}}
 	],
 	[{lists:flatten(io_lib:format("~p", [V])),
 		fun() -> R = form_data(V) end} || {V, R} <- Tests].
@@ -504,7 +575,7 @@ parse_cd_type(<< C, Rest/bits >>, Acc) ->
 		$; -> {Acc, parse_before_param(Rest, [])};
 		$\s -> {Acc, parse_before_param(Rest, [])};
 		$\t -> {Acc, parse_before_param(Rest, [])};
-		?INLINE_LOWERCASE(parse_cd_type, Rest, Acc)
+		_ -> ?LOWER(parse_cd_type, Rest, Acc)
 	end.
 
 -ifdef(TEST).
@@ -533,9 +604,7 @@ parse_content_disposition_test_() ->
 			{<<"file">>, [{<<"filename">>, <<"file2.gif">>}]}}
 	],
 	[{V, fun() -> R = parse_content_disposition(V) end} || {V, R} <- Tests].
--endif.
 
--ifdef(PERF).
 horse_parse_content_disposition_attachment() ->
 	horse:repeat(100000,
 		parse_content_disposition(<<"attachment; filename=genome.jpeg;"
@@ -558,7 +627,7 @@ horse_parse_content_disposition_inline() ->
 
 -spec parse_content_transfer_encoding(binary()) -> binary().
 parse_content_transfer_encoding(Bin) ->
-	?INLINE_LOWERCASE_BC(Bin).
+	?LOWER(Bin).
 
 -ifdef(TEST).
 parse_content_transfer_encoding_test_() ->
@@ -575,9 +644,7 @@ parse_content_transfer_encoding_test_() ->
 	],
 	[{V, fun() -> R = parse_content_transfer_encoding(V) end}
 		|| {V, R} <- Tests].
--endif.
 
--ifdef(PERF).
 horse_parse_content_transfer_encoding() ->
 	horse:repeat(100000,
 		parse_content_transfer_encoding(<<"QUOTED-PRINTABLE">>)
@@ -594,7 +661,7 @@ parse_content_type(Bin) ->
 parse_ct_type(<< C, Rest/bits >>, Acc) ->
 	case C of
 		$/ -> parse_ct_subtype(Rest, Acc, <<>>);
-		?INLINE_LOWERCASE(parse_ct_type, Rest, Acc)
+		_ -> ?LOWER(parse_ct_type, Rest, Acc)
 	end.
 
 parse_ct_subtype(<<>>, Type, Subtype) when Subtype =/= <<>> ->
@@ -604,7 +671,7 @@ parse_ct_subtype(<< C, Rest/bits >>, Type, Acc) ->
 		$; -> {Type, Acc, parse_before_param(Rest, [])};
 		$\s -> {Type, Acc, parse_before_param(Rest, [])};
 		$\t -> {Type, Acc, parse_before_param(Rest, [])};
-		?INLINE_LOWERCASE(parse_ct_subtype, Rest, Type, Acc)
+		_ -> ?LOWER(parse_ct_subtype, Rest, Type, Acc)
 	end.
 
 -ifdef(TEST).
@@ -638,9 +705,7 @@ parse_content_type_test_() ->
 	],
 	[{V, fun() -> R = parse_content_type(V) end}
 		|| {V, R} <- Tests].
--endif.
 
--ifdef(PERF).
 horse_parse_content_type_zero() ->
 	horse:repeat(100000,
 		parse_content_type(<<"text/plain">>)
@@ -668,7 +733,7 @@ parse_before_param(<< C, Rest/bits >>, Params) ->
 		$; -> parse_before_param(Rest, Params);
 		$\s -> parse_before_param(Rest, Params);
 		$\t -> parse_before_param(Rest, Params);
-		?INLINE_LOWERCASE(parse_param_name, Rest, Params, <<>>)
+		_ -> ?LOWER(parse_param_name, Rest, Params, <<>>)
 	end.
 
 parse_param_name(<<>>, Params, Acc) ->
@@ -676,7 +741,7 @@ parse_param_name(<<>>, Params, Acc) ->
 parse_param_name(<< C, Rest/bits >>, Params, Acc) ->
 	case C of
 		$= -> parse_param_value(Rest, Params, Acc);
-		?INLINE_LOWERCASE(parse_param_name, Rest, Params, Acc)
+		_ -> ?LOWER(parse_param_name, Rest, Params, Acc)
 	end.
 
 parse_param_value(<<>>, Params, Name) ->

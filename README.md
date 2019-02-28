@@ -429,6 +429,11 @@ tcp6       0      0 127.0.0.1:8006          :::*                    LISTEN      
 
 可以在二维码生成网站[http://www.liantu.com/](http://www.liantu.com/)生成导航地址的二维码，然后通过扫码在手机客户端添加导航
 
+请参考wiki和接口文档进行相关了解
+
+## wiki地址
+
+[wiki页](https://github.com/qunarcorp/ejabberd-open/wiki)
 ## 配置文件修改
 
 参考文档[setting.md](doc/setting.md)

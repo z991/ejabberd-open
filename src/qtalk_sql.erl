@@ -312,7 +312,7 @@ get_password_by_host(Host,User) ->
 get_password_salt_by_host(Host,User) ->
 	ejabberd_sql:sql_query(Host,
 		[<<"select password, pwd_salt from host_users where host_id in (select id from host_info where host = '">>,
-			Host,<<"') and user_id = '">>,User,<<"' and hire_flag = '1';">>]).
+			Host,<<"') and user_id = '">>,User,<<"' and hire_flag = '1' and frozen_flag='0';">>]).
 
 
 update_no_insert(Table, Fields, Vals, Where) ->

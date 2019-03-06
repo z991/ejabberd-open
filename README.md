@@ -420,10 +420,10 @@ tcp6       0      0 :::8083                 :::*                    LISTEN      
 tcp6       0      0 127.0.0.1:8005          :::*                    LISTEN      23748/java          
 tcp6       0      0 127.0.0.1:8006          :::*                    LISTEN      23785/java 
 ```
+到此，服务端已经安装完成。
+请下载[startalk客户端](https://im.qunar.com/new/#/download)
 
 客户端配置导航地址：[http://ip:8080/newapi/nck/qtalk_nav.qunar](http://ip:8080/newapi/nck/qtalk_nav.qunar)，使用账号：test，密码：testpassword登陆(将ip替换成自己服务器的ip)
-
-到此，服务端已经安装完成，请下载[startalk客户端](https://im.qunar.com/new/#/download)
 
 客户端配置导航的说明[配置导航](https://im.qunar.com/new/#/platform/access_guide/manage_nav?id=manage_nav_mb)
 

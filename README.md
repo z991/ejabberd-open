@@ -431,6 +431,19 @@ tcp6       0      0 127.0.0.1:8006          :::*                    LISTEN      
 
 请参考wiki和接口文档进行相关了解
 
+## 分支和PR
+
+当前，我们项目的分支是：
+
+* master(主干分支)
+* release(用于合并到master的准发布分支)
+* develop(当前开发分支)
+* v1.0(1.0版本的分支，当前最新稳定分支)
+* v1.1(1.1分支版本，支持Erlang/OTP 21.2)
+
+
+大家提交pull request的时候，可以根据不同分支的功能，合并到不同的分支
+
 ## wiki地址
 
 [wiki页](https://github.com/qunarcorp/ejabberd-open/wiki)

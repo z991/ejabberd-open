@@ -3595,7 +3595,7 @@ CREATE TABLE public.user_register_mucs (
     username text NOT NULL,
     muc_name text NOT NULL,
     domain character varying(200) NOT NULL,
-    created_at timestamp without time zone DEFAULT now() NOT NULL,
+    created_at timestamp with time zone DEFAULT (now())::timestamp(3) with time zone NOT NULL,
     registed_flag integer DEFAULT 1,
     host text DEFAULT 'ejabhost1'::text NOT NULL
 );

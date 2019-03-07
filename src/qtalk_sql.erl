@@ -129,7 +129,7 @@ insert_msg_v2(LServer,From,To,FHost,THost,Body,ID,Time) ->
 del_user_register_mucs(LServer,Muc,Domain) ->
     catch ejabberd_sql:sql_query(LServer,
         %%?SQL("update user_register_mucs set registed_flag = 0 , created_at = now() where muc_name = %(Muc)s ;")).
-        [<<"update user_register_mucs set registed_flag = 0 , created_at = now() where muc_name = '">>, Muc, <<"' and domain = '">>,Domain,<<"';">>]).
+        [<<"update user_register_mucs set registed_flag = 0 , created_at = (now())::timestamp(3) where muc_name = '">>, Muc, <<"' and domain = '">>,Domain,<<"';">>]).
 
 del_muc_users(LServer,Muc, Domain) ->
     Now = qtalk_public:get_timestamp(),
@@ -189,7 +189,7 @@ update_register_mucs(LServer,User,Host,Muc,Domain,RFlag) ->
     case catch ejabberd_sql:sql_query(LServer,
         %%?SQL("update user_register_mucs set registed_flag = %(Flag)d,created_at = now() where username = "
         %%    "%(User)s and muc_name = %(Muc)s and domain = %(Domain)s ;")) of
-        [<<"update user_register_mucs set registed_flag = '">>, RFlag, <<"', created_at = now() where username = '">>, User,
+        [<<"update user_register_mucs set registed_flag = '">>, RFlag, <<"', created_at = (now())::timestamp(3) where username = '">>, User,
 			 <<"' and muc_name = '">>, Muc, <<"' and domain = '">>, Domain, <<"' and host = '">>,Host,<<"';">>]) of
         {updated, 1} ->
             ok;

@@ -153,6 +153,7 @@ $ cd /startalk/download
 $ git clone https://github.com/qunarcorp/ejabberd-open.git
 $ git clone https://github.com/qunarcorp/or_open.git
 $ git clone https://github.com/qunarcorp/qtalk_cowboy_open.git
+$ git clone https://github.com/qunarcorp/qtalk_search.git
 
 $ cp ejabberd-open/doc/qtalk.sql /startalk/
 $ chmod 777 /startalk/qtalk.sql
@@ -420,6 +421,34 @@ tcp6       0      0 :::8083                 :::*                    LISTEN      
 tcp6       0      0 127.0.0.1:8005          :::*                    LISTEN      23748/java          
 tcp6       0      0 127.0.0.1:8006          :::*                    LISTEN      23785/java 
 ```
+
+### 安装后端搜索服务
+```
+安装python3 (3以上都可以，以3.6为标准)
+$ cd /startalk/download/qtalk_search
+$ sudo yum install https://centos7.iuscommunity.org/ius-release.rpm
+$ sudo yum install python36u
+安装pip3
+$ sudo yum -y install python-pip
+所需模块见/startalk/download/qtalk_search/requirements.txt, 建议使用virtualenv部署模块所需环境:
+                $ sudo pip install -U virtualenv （安装virtualenv）
+                $ sudo pip install --upgrade pip
+                $ virtualenv --system-site-packages -p python3.6 ./venv （在当前目录下创建venv环境）
+                启动环境
+                $ source venv/bin/activate
+                退出环境: 
+                $ deactivate
+
+配置conf/configure.ini, 具体参数详见文件内注释, 如无特殊需求可不修改
+$ sudo vim ./conf/configure.ini
+安装项目所需模块
+$ pip install -r requirements.txt
+设置PYTHONPATH
+$ export PYTHONPATH=path/to/project/qtalk_search:$PYTHONPATH
+后台启动 (后续将改为gunicorn部署)
+$ nohup python3.6 search.py & >/dev/null 2>log &
+```
+
 到此，服务端已经安装完成。
 请下载[startalk客户端](https://im.qunar.com/new/#/download)
 

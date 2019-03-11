@@ -3049,7 +3049,7 @@ find_changed_items(UJID, UAffiliation, URole,
 		   [#xmlel{name = <<"item">>, attrs = Attrs} = Item
 		    | Items],
 		   Lang, StateData, Res) ->
-    TJID = case fxml:get_attr(<<"jid">>, Attrs) of
+    TJID = case fxml:get_attr(<<"real_jid">>, Attrs) of
 	     {value, S} ->
 		 case jid:from_string(S) of
 		   error ->

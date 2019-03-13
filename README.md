@@ -362,32 +362,6 @@ $ cd /startalk/tomcat
 修改导航地址：
 $  vim /startalk/tomcat/im_http_service/webapps/im_http_service/WEB-INF/classes/nav.json
 
--
-{
-  "Login": {
-    "loginType": "password"
-  },
-  "baseaddess": {
-    "simpleapiurl": "http://ip:8080",
-    "fileurl": "http://ip:8080",
-    "domain": "qtalk.test.org",
-    "javaurl": "http://ip:8080/package",
-    "protobufPcPort": 5202,
-    "xmpp": "ip",
-    "xmppport": 5222,
-    "protobufPort": 5202,
-    "pubkey": "rsa_public_key",
-    "xmppmport": 5222,
-    "httpurl": "http://ip:8080/newapi",
-    "apiurl": "http://ip:8080/api"
-  },
-  "imConfig": {
-    "RsaEncodeType": 1,
-    "showOrganizational": true
-  },
-  "version": 10005
-}
--
 将ip替换成对应机器的ip地址
 
 修改推送服务的地址

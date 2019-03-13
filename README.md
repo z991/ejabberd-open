@@ -420,7 +420,7 @@ $ pip install -r requirements.txt
 设置PYTHONPATH
 $ export PYTHONPATH=path/to/project/qtalk_search:$PYTHONPATH
 后台启动 (后续将改为gunicorn部署)
-$ nohup python3.6 search.py & >/dev/null 2>log &
+$ nohup python3.6 search.py 1>/dev/null 2>/dev/null &
 ```
 
 到此，服务端已经安装完成。

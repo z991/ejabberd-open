@@ -252,6 +252,10 @@ ejabberd=# select * from host_users;
   1 |       1 | test          | 测试账号     | /机器人       |     |       | 机器人       |      |      |      |      | test          |           0 |       1 | U         |         1 |      1 | 1234567890                       |          1 | qtalk
   2 |       1 | file-transfer | 文件传输助手 | /智能服务助手 |     |       | 智能服务助手 |      |      |      |      | file-transfer |           1 |       1 | U         |         1 |      1 | 15f15057f5be45c6bb6522d08078e0d4 |          1 | qtalk
 (2 rows)
+postgredql报警解决
+根据按照文档，配置文件的位置应该在/export/pg110_data/postgresql.conf. 你检查下logging_collector 是不是配置的off，如果是的话，改为on，然后重启一下数据库
+关闭数据库的命令：/opt/pg11/bin/pg_ctl -D /export/pg110_data stop
+启动数据库的命令：/opt/pg11/bin/pg_ctl -D /export/pg110_data start
 ```
 
 ### openresty安装
@@ -322,6 +326,22 @@ $ cp ejabberdctl.cfg.qunar /startalk/ejabberd/etc/ejabberd/ejabberdctl.cfg
 
 ejabberd配置
 参考 https://github.com/qunarcorp/ejabberd-open/blob/master/doc/setting.md
+修改 vim /startalk/ejabberd/etc/ejabberd/ejabberd.yml
+数据库配置
+sql_type: pgsql
+sql_server: "localhost"
+sql_database: "ejabberd"
+sql_username: "postgres"
+sql_password: "ejabberd"
+
+sm_db_type: redis
+redis_start_mode: 0
+redis_pool_size: 1
+redis_server: "127.0.0.1"
+redis_port: 6379
+redis_password: "123456"
+redis_tab: "0,1,2,3,5,7,10,11,15"
+
 
 启动ejabberd
 
@@ -361,7 +381,7 @@ $ cd /startalk/tomcat
 
 修改导航地址：
 $  vim /startalk/tomcat/im_http_service/webapps/im_http_service/WEB-INF/classes/nav.json
-
+:%s/foo/bar/g
 将ip替换成对应机器的ip地址
 
 修改推送服务的地址
@@ -401,7 +421,7 @@ tcp6       0      0 127.0.0.1:8006          :::*                    LISTEN      
 安装python3 (3以上都可以，以3.6为标准)
 $ cd /startalk/download/qtalk_search
 $ sudo yum install https://centos7.iuscommunity.org/ius-release.rpm
-$ sudo yum install python36u
+$ sudo yum install python36
 安装pip3
 $ sudo yum -y install python-pip
 所需模块见/startalk/download/qtalk_search/requirements.txt, 建议使用virtualenv部署模块所需环境:
